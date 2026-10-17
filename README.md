@@ -37,4 +37,4 @@ Current build includes:
 4. Press Play — WASD/arrows to move, E to interact with tasks, Q to kill (if role is set to Impostor on the Player GameObject)
 
 ## Team
-Built by [your names here] as a learning project exploring Unity, multiplayer game architecture, and pixel-art game design.
+Built by EPIPHRAME as a learning project exploring Unity, multiplayer game architecture, and pixel-art game design.

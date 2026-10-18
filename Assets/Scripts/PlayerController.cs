@@ -1,8 +1,9 @@
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Rigidbody2D))]
-public class PlayerController : MonoBehaviour
+public class PlayerController : NetworkBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 3.5f;
@@ -20,7 +21,6 @@ public class PlayerController : MonoBehaviour
     private Vector2 moveInput;
     private Vector2 facingDirection = Vector2.down;
 
-    // Hook for TaskZone to register itself when player enters range
     public TaskZone CurrentTaskZone { get; set; }
 
     private void Awake()
@@ -28,13 +28,22 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         spriteRenderer = GetComponent<SpriteRenderer>();
 
-        // Top-down game: no gravity should pull the player
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
     }
 
-    private void OnEnable()
+    public override void OnNetworkSpawn()
     {
+        // Only the player who owns this object should read local input
+        // and enable their own Input Actions. Remote players' movement
+        // is driven entirely by NetworkTransform syncing, not local input.
+        if (!IsOwner)
+        {
+            // Disable input reading for anything that isn't "my" player
+            enabled = false;
+            return;
+        }
+
         moveAction.action.Enable();
         interactAction.action.Enable();
         killAction.action.Enable();
@@ -43,8 +52,10 @@ public class PlayerController : MonoBehaviour
         killAction.action.performed += OnKillPressed;
     }
 
-    private void OnDisable()
+    public override void OnNetworkDespawn()
     {
+        if (!IsOwner) return;
+
         moveAction.action.Disable();
         interactAction.action.Disable();
         killAction.action.Disable();
@@ -55,6 +66,8 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        if (!IsOwner) return;
+
         moveInput = moveAction.action.ReadValue<Vector2>();
 
         if (moveInput.sqrMagnitude > 0.01f)
@@ -65,13 +78,16 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Normalize so diagonal movement isn't faster than straight movement
+        if (!IsOwner) return;
+
         Vector2 velocity = moveInput.normalized * moveSpeed;
         rb.linearVelocity = velocity;
     }
 
     private void OnInteract(InputAction.CallbackContext context)
     {
+        if (!IsOwner) return;
+
         if (CurrentTaskZone != null)
         {
             CurrentTaskZone.TryComplete();
@@ -80,6 +96,8 @@ public class PlayerController : MonoBehaviour
 
     private void OnKillPressed(InputAction.CallbackContext context)
     {
+        if (!IsOwner) return;
+
         var myRole = GetComponent<PlayerRole>();
         if (myRole == null || !myRole.IsImpostor || !myRole.IsAlive) return;
 
@@ -89,10 +107,23 @@ public class PlayerController : MonoBehaviour
             if (hit.gameObject == gameObject) continue;
 
             Killable target = hit.GetComponent<Killable>();
-            if (target != null && target.TryKill())
+            if (target != null)
             {
-                break; // one kill at a time
+                // Request the kill via RPC so the server (source of truth)
+                // actually applies it and syncs the result to everyone.
+                RequestKillServerRpc(hit.GetComponent<NetworkObject>().NetworkObjectId);
+                break;
             }
+        }
+    }
+
+    [ServerRpc]
+    private void RequestKillServerRpc(ulong targetNetworkObjectId)
+    {
+        if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObj))
+        {
+            Killable target = targetObj.GetComponent<Killable>();
+            target?.TryKill();
         }
     }
 

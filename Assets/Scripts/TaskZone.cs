@@ -1,21 +1,29 @@
+using Unity.Netcode;
 using UnityEngine;
 
 [RequireComponent(typeof(Collider2D))]
-public class TaskZone : MonoBehaviour
+[RequireComponent(typeof(NetworkObject))]
+public class TaskZone : NetworkBehaviour
 {
     [Header("Task Settings")]
     [SerializeField] private string taskName = "Task";
-    [SerializeField] private bool isComplete = false;
+
+    // Synced so every client knows if this specific task is already done
+    // (prevents two players both "completing" the same task)
+    private NetworkVariable<bool> isComplete = new NetworkVariable<bool>(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
 
     [Header("Visual Feedback (optional)")]
-    [SerializeField] private GameObject promptIndicator; // e.g. a "Press E" icon above the task
+    [SerializeField] private GameObject promptIndicator;
 
-    public bool IsComplete => isComplete;
+    public bool IsComplete => isComplete.Value;
     public string TaskName => taskName;
 
     private void Awake()
     {
-        // Make sure the collider is a trigger so the player can walk into it without being blocked
         Collider2D col = GetComponent<Collider2D>();
         col.isTrigger = true;
 
@@ -23,10 +31,26 @@ public class TaskZone : MonoBehaviour
             promptIndicator.SetActive(false);
     }
 
+    public override void OnNetworkSpawn()
+    {
+        isComplete.OnValueChanged += HandleCompletionChanged;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        isComplete.OnValueChanged -= HandleCompletionChanged;
+    }
+
+    private void HandleCompletionChanged(bool previous, bool current)
+    {
+        if (current && promptIndicator != null)
+            promptIndicator.SetActive(false);
+    }
+
     private void OnTriggerEnter2D(Collider2D other)
     {
         PlayerController player = other.GetComponent<PlayerController>();
-        if (player != null && !isComplete)
+        if (player != null && player.IsOwner && !IsComplete)
         {
             player.CurrentTaskZone = this;
             if (promptIndicator != null)
@@ -37,7 +61,7 @@ public class TaskZone : MonoBehaviour
     private void OnTriggerExit2D(Collider2D other)
     {
         PlayerController player = other.GetComponent<PlayerController>();
-        if (player != null)
+        if (player != null && player.IsOwner)
         {
             if (player.CurrentTaskZone == this)
                 player.CurrentTaskZone = null;
@@ -47,16 +71,21 @@ public class TaskZone : MonoBehaviour
         }
     }
 
+    // Called locally by the owning player; requests completion from the server
     public void TryComplete()
     {
-        if (isComplete) return;
+        if (IsComplete) return;
+        RequestCompleteServerRpc();
+    }
 
-        isComplete = true;
-        Debug.Log($"Task completed: {taskName}");
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestCompleteServerRpc()
+    {
+        if (isComplete.Value) return;
 
-        if (promptIndicator != null)
-            promptIndicator.SetActive(false);
+        isComplete.Value = true;
+        Debug.Log($"[Server] Task completed: {taskName}");
 
-        TaskManager.Instance?.OnTaskCompleted(this);
+        TaskManager.Instance?.ServerReportTaskCompleted(this);
     }
 }

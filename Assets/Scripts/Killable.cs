@@ -1,7 +1,8 @@
+using Unity.Netcode;
 using UnityEngine;
 
 [RequireComponent(typeof(Collider2D))]
-public class Killable : MonoBehaviour
+public class Killable : NetworkBehaviour
 {
     private PlayerRole targetRole;
 
@@ -14,9 +15,12 @@ public class Killable : MonoBehaviour
         }
     }
 
+    // Only ever called server-side (from PlayerController's RequestKillServerRpc)
     public bool TryKill()
     {
+        if (!IsServer) return false;
         if (targetRole == null || !targetRole.IsAlive) return false;
+
         targetRole.Kill();
         return true;
     }

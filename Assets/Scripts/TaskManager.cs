@@ -1,25 +1,39 @@
 using System;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
-public class TaskManager : MonoBehaviour
+public class TaskManager : NetworkBehaviour
 {
     public static TaskManager Instance { get; private set; }
 
     [Header("Task Tracking")]
     [SerializeField] private List<TaskZone> allTasks = new List<TaskZone>();
 
-    public int TotalTasks => allTasks.Count;
-    public int CompletedTasks { get; private set; } = 0;
+    // NetworkVariable: the server owns the real value, and it auto-syncs
+    // to every connected client whenever it changes.
+    private NetworkVariable<int> completedTasks = new NetworkVariable<int>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    private NetworkVariable<int> totalTasks = new NetworkVariable<int>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public int CompletedTasks => completedTasks.Value;
+    public int TotalTasks => totalTasks.Value;
     public int TasksRemaining => TotalTasks - CompletedTasks;
 
-    // Subscribe to these from UI or game-state scripts
-    public static event Action<int, int> OnTaskProgressChanged; // (completed, total)
+    // Local events UI still subscribes to, same as before
+    public static event Action<int, int> OnTaskProgressChanged;
     public static event Action OnAllTasksCompleted;
 
     private void Awake()
     {
-        // Simple singleton — if one already exists, destroy this duplicate
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
@@ -28,34 +42,53 @@ public class TaskManager : MonoBehaviour
         Instance = this;
     }
 
-    private void Start()
+    public override void OnNetworkSpawn()
     {
-        // Auto-find all TaskZones in the scene if the list wasn't filled in manually
-        if (allTasks.Count == 0)
+        // Listen for changes on ALL clients (including host) so UI updates everywhere
+        completedTasks.OnValueChanged += HandleProgressChanged;
+
+        if (IsServer)
         {
-            allTasks.AddRange(FindObjectsByType<TaskZone>(FindObjectsSortMode.None));
+            if (allTasks.Count == 0)
+            {
+                allTasks.AddRange(FindObjectsByType<TaskZone>(FindObjectsSortMode.None));
+            }
+            totalTasks.Value = allTasks.Count;
+            completedTasks.Value = 0;
         }
 
-        CompletedTasks = 0;
+        // Fire once on spawn so UI has correct initial values immediately
         OnTaskProgressChanged?.Invoke(CompletedTasks, TotalTasks);
     }
 
-    public void OnTaskCompleted(TaskZone task)
+    public override void OnNetworkDespawn()
     {
+        completedTasks.OnValueChanged -= HandleProgressChanged;
+    }
+
+    private void HandleProgressChanged(int previousValue, int newValue)
+    {
+        OnTaskProgressChanged?.Invoke(newValue, TotalTasks);
+
+        if (newValue >= TotalTasks && TotalTasks > 0)
+        {
+            OnAllTasksCompleted?.Invoke();
+        }
+    }
+
+    // Called via ServerRpc from TaskZone when a player completes a task.
+    // Only the server is allowed to actually increment the NetworkVariable.
+    public void ServerReportTaskCompleted(TaskZone task)
+    {
+        if (!IsServer) return;
+
         if (!allTasks.Contains(task))
         {
             allTasks.Add(task);
+            totalTasks.Value = allTasks.Count;
         }
 
-        CompletedTasks++;
-        Debug.Log($"Tasks complete: {CompletedTasks}/{TotalTasks}");
-
-        OnTaskProgressChanged?.Invoke(CompletedTasks, TotalTasks);
-
-        if (CompletedTasks >= TotalTasks)
-        {
-            Debug.Log("ALL TASKS COMPLETE");
-            OnAllTasksCompleted?.Invoke();
-        }
+        completedTasks.Value++;
+        Debug.Log($"[Server] Tasks complete: {completedTasks.Value}/{totalTasks.Value}");
     }
 }

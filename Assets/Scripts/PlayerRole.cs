@@ -9,25 +9,29 @@ public enum Role
 
 public class PlayerRole : NetworkBehaviour
 {
-    // Server-owned, synced to everyone. Note: in a real game, you'd want
-    // each player to ONLY see their own role (and maybe fellow impostors),
-    // not everyone else's — that requires a more targeted sync approach
-    // (e.g. ClientRpc targeted at one client). This version is simplified
-    // for getting the core flow working first.
-    private NetworkVariable<Role> currentRole = new NetworkVariable<Role>(
-        Role.Crewmate,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
+    // NOT a NetworkVariable anymore — this field only ever holds the
+    // correct value on the SERVER. Other clients never receive it directly.
+    private Role serverRole = Role.Crewmate;
 
+    // Each client's own local cache of ITS OWN role, set only via the
+    // targeted ClientRpc below. On any client that isn't the owner,
+    // this stays at the default (Crewmate) and is never used for anything
+    // meaningful, since IsOwner gates all the real gameplay checks anyway.
+    private Role localCachedRole = Role.Crewmate;
+
+    // isAlive stays a normal synced NetworkVariable — whether someone is
+    // alive/dead is NOT secret info, everyone needs to see dead bodies etc.
     private NetworkVariable<bool> isAlive = new NetworkVariable<bool>(
         true,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
 
-    public Role CurrentRole => currentRole.Value;
-    public bool IsImpostor => currentRole.Value == Role.Impostor;
+    // Returns the correct value depending on who's asking:
+    // - On the server, the authoritative serverRole is always correct.
+    // - On a client, only the owner's cached copy is meaningful.
+    public Role CurrentRole => IsServer ? serverRole : localCachedRole;
+    public bool IsImpostor => CurrentRole == Role.Impostor;
     public bool IsAlive => isAlive.Value;
 
     public override void OnNetworkSpawn()
@@ -40,35 +44,49 @@ public class PlayerRole : NetworkBehaviour
         isAlive.OnValueChanged -= HandleAliveChanged;
     }
 
-    // Only the server should ever call this directly (e.g. from GameStartManager)
+    // Called ONLY by the server (e.g. from GameStartManager during role assignment).
     public void ServerSetRole(Role role)
     {
         if (!IsServer) return;
-        currentRole.Value = role;
+
+        serverRole = role;
+
+        // Send this role ONLY to the client that owns this player object.
+        // No one else — including the server's own broadcast — reaches other clients.
+        ClientRpcParams targetOnlyOwner = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = new[] { OwnerClientId }
+            }
+        };
+
+        ReceiveRoleClientRpc(role, targetOnlyOwner);
     }
 
+    [ClientRpc]
+    private void ReceiveRoleClientRpc(Role role, ClientRpcParams rpcParams = default)
+    {
+        // This method only actually executes on the targeted client (the owner).
+        // Every other client never receives this call at all.
+        localCachedRole = role;
+        Debug.Log($"[Client] You are: {role}");
+    }
+
+    // Called server-side only (e.g. from Killable.TryKill())
     public void Kill()
     {
-        if (!IsServer) return; // only server applies kills
+        if (!IsServer) return;
         if (!isAlive.Value) return;
 
         isAlive.Value = false;
         Debug.Log($"{gameObject.name} was eliminated.");
-
-        // Movement should stop everywhere once dead
-        var controller = GetComponent<PlayerController>();
-        if (controller != null)
-        {
-            // Disabling directly here affects the server's copy; the owning
-            // client's copy reacts via HandleAliveChanged below instead.
-        }
     }
 
     private void HandleAliveChanged(bool previous, bool current)
     {
         if (!current)
         {
-            // Runs on every client when a player dies, including the server
             var rb = GetComponent<Rigidbody2D>();
             if (rb != null) rb.linearVelocity = Vector2.zero;
 

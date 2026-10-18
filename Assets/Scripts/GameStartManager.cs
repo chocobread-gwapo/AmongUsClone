@@ -79,12 +79,38 @@ public class GameStartManager : NetworkBehaviour
         int actualImpostorCount = Mathf.Min(impostorCount, allPlayers.Count - 1);
         actualImpostorCount = Mathf.Max(actualImpostorCount, allPlayers.Count > 1 ? 1 : 0);
 
+        List<ulong> impostorClientIds = new List<ulong>();
+
         for (int i = 0; i < allPlayers.Count; i++)
         {
             Role assignedRole = (i < actualImpostorCount) ? Role.Impostor : Role.Crewmate;
             allPlayers[i].ServerSetRole(assignedRole);
+
+            if (assignedRole == Role.Impostor)
+            {
+                impostorClientIds.Add(allPlayers[i].OwnerClientId);
+            }
+        }
+
+        // Let each impostor know who their fellow impostor(s) are —
+        // sent only to the impostors themselves, no one else.
+        if (impostorClientIds.Count > 1)
+        {
+            ClientRpcParams targetImpostorsOnly = new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams { TargetClientIds = impostorClientIds.ToArray() }
+            };
+            NotifyFellowImpostorsClientRpc(impostorClientIds.ToArray(), targetImpostorsOnly);
         }
 
         Debug.Log($"[Server] Assigned roles: {actualImpostorCount} Impostor(s) out of {allPlayers.Count} players.");
+    }
+
+    [ClientRpc]
+    private void NotifyFellowImpostorsClientRpc(ulong[] impostorClientIds, ClientRpcParams rpcParams = default)
+    {
+        // Runs only on clients who are themselves impostors (that's who this was sent to).
+        Debug.Log($"[Client] Your fellow impostor client IDs: {string.Join(", ", impostorClientIds)}");
+        // TODO: use this to highlight teammates in UI, e.g. colored name tags
     }
 }

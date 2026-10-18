@@ -12,9 +12,13 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private InputActionReference moveAction;
     [SerializeField] private InputActionReference interactAction;
     [SerializeField] private InputActionReference killAction;
+    [SerializeField] private InputActionReference reportAction;
 
     [Header("Kill Settings")]
     [SerializeField] private float killRange = 1.2f;
+
+    [Header("Report Settings")]
+    [SerializeField] private float reportRange = 1.5f;
 
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
@@ -34,12 +38,8 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // Only the player who owns this object should read local input
-        // and enable their own Input Actions. Remote players' movement
-        // is driven entirely by NetworkTransform syncing, not local input.
         if (!IsOwner)
         {
-            // Disable input reading for anything that isn't "my" player
             enabled = false;
             return;
         }
@@ -47,9 +47,17 @@ public class PlayerController : NetworkBehaviour
         moveAction.action.Enable();
         interactAction.action.Enable();
         killAction.action.Enable();
+        reportAction.action.Enable();
 
         interactAction.action.performed += OnInteract;
         killAction.action.performed += OnKillPressed;
+        reportAction.action.performed += OnReportPressed;
+
+        CameraFollow cam = Camera.main.GetComponent<CameraFollow>();
+        if (cam != null)
+        {
+            cam.SetTarget(transform);
+        }
     }
 
     public override void OnNetworkDespawn()
@@ -59,14 +67,22 @@ public class PlayerController : NetworkBehaviour
         moveAction.action.Disable();
         interactAction.action.Disable();
         killAction.action.Disable();
+        reportAction.action.Disable();
 
         interactAction.action.performed -= OnInteract;
         killAction.action.performed -= OnKillPressed;
+        reportAction.action.performed -= OnReportPressed;
     }
 
     private void Update()
     {
         if (!IsOwner) return;
+
+        if (MeetingManager.Instance != null && MeetingManager.Instance.IsMeetingActive)
+        {
+            moveInput = Vector2.zero;
+            return;
+        }
 
         moveInput = moveAction.action.ReadValue<Vector2>();
 
@@ -80,13 +96,24 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsOwner) return;
 
+        if (MeetingManager.Instance != null && MeetingManager.Instance.IsMeetingActive)
+        {
+            rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
         Vector2 velocity = moveInput.normalized * moveSpeed;
         rb.linearVelocity = velocity;
     }
 
+    private bool IsMeetingBlocking()
+    {
+        return MeetingManager.Instance != null && MeetingManager.Instance.IsMeetingActive;
+    }
+
     private void OnInteract(InputAction.CallbackContext context)
     {
-        if (!IsOwner) return;
+        if (!IsOwner || IsMeetingBlocking()) return;
 
         if (CurrentTaskZone != null)
         {
@@ -96,7 +123,7 @@ public class PlayerController : NetworkBehaviour
 
     private void OnKillPressed(InputAction.CallbackContext context)
     {
-        if (!IsOwner) return;
+        if (!IsOwner || IsMeetingBlocking()) return;
 
         var myRole = GetComponent<PlayerRole>();
         if (myRole == null || !myRole.IsImpostor || !myRole.IsAlive) return;
@@ -109,9 +136,30 @@ public class PlayerController : NetworkBehaviour
             Killable target = hit.GetComponent<Killable>();
             if (target != null)
             {
-                // Request the kill via RPC so the server (source of truth)
-                // actually applies it and syncs the result to everyone.
                 RequestKillServerRpc(hit.GetComponent<NetworkObject>().NetworkObjectId);
+                break;
+            }
+        }
+    }
+
+    private void OnReportPressed(InputAction.CallbackContext context)
+    {
+        if (!IsOwner || IsMeetingBlocking()) return;
+
+        var myRole = GetComponent<PlayerRole>();
+        if (myRole == null || !myRole.IsAlive) return;
+
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, reportRange);
+        foreach (var hit in hits)
+        {
+            if (hit.gameObject == gameObject) continue;
+
+            PlayerRole targetRole = hit.GetComponent<PlayerRole>();
+            NetworkObject targetNetObj = hit.GetComponent<NetworkObject>();
+
+            if (targetRole != null && !targetRole.IsAlive && targetNetObj != null)
+            {
+                MeetingManager.Instance.RequestReportBodyServerRpc(targetNetObj.NetworkObjectId);
                 break;
             }
         }

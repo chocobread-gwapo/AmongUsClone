@@ -26,9 +26,6 @@ public class MeetingUI : MonoBehaviour
 
     private void OnEnable()
     {
-        // Poll isn't ideal, but MeetingManager is a NetworkBehaviour that may
-        // not exist yet when this UI first loads — check periodically instead
-        // of a hard reference dependency at scene load time.
         InvokeRepeating(nameof(CheckMeetingState), 0.2f, 0.2f);
     }
 
@@ -105,6 +102,15 @@ public class MeetingUI : MonoBehaviour
         if (skipBtn != null)
         {
             skipBtn.onClick.AddListener(() => CastVote(MeetingManager.SkipVoteValue));
+        }
+
+        // Force the layout group to recalculate immediately instead of waiting
+        // for Unity's next internal layout pass — without this, newly
+        // instantiated children can visually stack at (0,0) for a frame or more.
+        RectTransform containerRect = playerListContainer.GetComponent<RectTransform>();
+        if (containerRect != null)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(containerRect);
         }
     }
 

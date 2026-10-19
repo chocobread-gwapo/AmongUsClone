@@ -53,10 +53,20 @@ public class PlayerController : NetworkBehaviour
         killAction.action.performed += OnKillPressed;
         reportAction.action.performed += OnReportPressed;
 
-        CameraFollow cam = Camera.main.GetComponent<CameraFollow>();
+        // CameraFollow cam = Camera.main.GetComponent<CameraFollow>();
+        // if (cam != null)
+        // {
+        //     cam.SetTarget(transform);
+        // }
+
+        CameraFollow cam = Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null;
         if (cam != null)
         {
             cam.SetTarget(transform);
+        }
+        else
+        {
+            Debug.LogWarning("Could not find a Main Camera with CameraFollow attached.");
         }
     }
 

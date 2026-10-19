@@ -29,6 +29,9 @@ public class TaskZone : NetworkBehaviour
 
         if (promptIndicator != null)
             promptIndicator.SetActive(false);
+
+        // NEW — set the floating label to this task's name, e.g. "Wiring"
+        GetComponent<WorldLabel>()?.SetLabel(taskName);
     }
 
     public override void OnNetworkSpawn()

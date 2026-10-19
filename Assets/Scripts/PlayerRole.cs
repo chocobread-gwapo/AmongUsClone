@@ -9,28 +9,22 @@ public enum Role
 
 public class PlayerRole : NetworkBehaviour
 {
-    // NOT a NetworkVariable anymore — this field only ever holds the
-    // correct value on the SERVER. Other clients never receive it directly.
+    // Server-authoritative, never directly synced — see ServerSetRole/ServerSetMalignoType
     private Role serverRole = Role.Crewmate;
+    private MalignoType serverMalignoType = MalignoType.None;
 
-    // Each client's own local cache of ITS OWN role, set only via the
-    // targeted ClientRpc below. On any client that isn't the owner,
-    // this stays at the default (Crewmate) and is never used for anything
-    // meaningful, since IsOwner gates all the real gameplay checks anyway.
+    // Each client's own cached copy of ITS OWN role/type, set only via targeted ClientRpc
     private Role localCachedRole = Role.Crewmate;
+    private MalignoType localCachedMalignoType = MalignoType.None;
 
-    // isAlive stays a normal synced NetworkVariable — whether someone is
-    // alive/dead is NOT secret info, everyone needs to see dead bodies etc.
     private NetworkVariable<bool> isAlive = new NetworkVariable<bool>(
         true,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
 
-    // Returns the correct value depending on who's asking:
-    // - On the server, the authoritative serverRole is always correct.
-    // - On a client, only the owner's cached copy is meaningful.
     public Role CurrentRole => IsServer ? serverRole : localCachedRole;
+    public MalignoType CurrentMalignoType => IsServer ? serverMalignoType : localCachedMalignoType;
     public bool IsImpostor => CurrentRole == Role.Impostor;
     public bool IsAlive => isAlive.Value;
 
@@ -44,36 +38,34 @@ public class PlayerRole : NetworkBehaviour
         isAlive.OnValueChanged -= HandleAliveChanged;
     }
 
-    // Called ONLY by the server (e.g. from GameStartManager during role assignment).
-    public void ServerSetRole(Role role)
+    // Called ONLY by the server during role assignment (GameStartManager)
+    public void ServerSetRole(Role role, MalignoType malignoType = MalignoType.None)
     {
         if (!IsServer) return;
 
         serverRole = role;
+        serverMalignoType = malignoType;
 
-        // Send this role ONLY to the client that owns this player object.
-        // No one else — including the server's own broadcast — reaches other clients.
         ClientRpcParams targetOnlyOwner = new ClientRpcParams
         {
-            Send = new ClientRpcSendParams
-            {
-                TargetClientIds = new[] { OwnerClientId }
-            }
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
         };
 
-        ReceiveRoleClientRpc(role, targetOnlyOwner);
+        ReceiveRoleClientRpc(role, malignoType, targetOnlyOwner);
+
+        // Enable the matching ability component, server-side, if one exists.
+        // Each ability script checks CurrentMalignoType itself and no-ops if it doesn't match,
+        // so it's safe to just leave all of them present on the prefab and let them self-gate.
     }
 
     [ClientRpc]
-    private void ReceiveRoleClientRpc(Role role, ClientRpcParams rpcParams = default)
+    private void ReceiveRoleClientRpc(Role role, MalignoType malignoType, ClientRpcParams rpcParams = default)
     {
-        // This method only actually executes on the targeted client (the owner).
-        // Every other client never receives this call at all.
         localCachedRole = role;
-        Debug.Log($"[Client] You are: {role}");
+        localCachedMalignoType = malignoType;
+        Debug.Log($"[Client] You are: {role}" + (role == Role.Impostor ? $" ({malignoType})" : ""));
     }
 
-    // Called server-side only (e.g. from Killable.TryKill())
     public void Kill()
     {
         if (!IsServer) return;

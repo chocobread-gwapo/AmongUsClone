@@ -9,6 +9,18 @@ public class GameStartManager : NetworkBehaviour
     [Header("Match Settings")]
     [SerializeField] private int impostorCount = 1;
 
+    [Header("Maligno Types")]
+    [Tooltip("Which folklore roles can be randomly assigned. Uncheck any not built/tested yet.")]
+    [SerializeField]
+    private List<MalignoType> enabledMalignoTypes = new List<MalignoType>
+    {
+        MalignoType.Duwende,
+        MalignoType.Tikbalang,
+        MalignoType.BalBal,
+        MalignoType.Aswang,
+        MalignoType.Kapre,
+    };
+
     private NetworkVariable<bool> gameStarted = new NetworkVariable<bool>(
         false,
         NetworkVariableReadPermission.Everyone,
@@ -27,8 +39,6 @@ public class GameStartManager : NetworkBehaviour
         Instance = this;
     }
 
-    // Call this from a "Start Game" button, host-only.
-    // Only works if called on the server/host instance.
     public void HostStartGame()
     {
         if (!IsServer)
@@ -49,7 +59,6 @@ public class GameStartManager : NetworkBehaviour
 
     private void AssignRoles()
     {
-        // Gather every connected player's NetworkObject
         List<PlayerRole> allPlayers = new List<PlayerRole>();
         foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
         {
@@ -83,17 +92,21 @@ public class GameStartManager : NetworkBehaviour
 
         for (int i = 0; i < allPlayers.Count; i++)
         {
-            Role assignedRole = (i < actualImpostorCount) ? Role.Impostor : Role.Crewmate;
-            allPlayers[i].ServerSetRole(assignedRole);
-
-            if (assignedRole == Role.Impostor)
+            if (i < actualImpostorCount)
             {
+                MalignoType assignedType = PickRandomMalignoType();
+                allPlayers[i].ServerSetRole(Role.Impostor, assignedType);
                 impostorClientIds.Add(allPlayers[i].OwnerClientId);
+
+                Debug.Log($"[Server] {allPlayers[i].gameObject.name} assigned Impostor ({assignedType})");
+            }
+            else
+            {
+                allPlayers[i].ServerSetRole(Role.Crewmate, MalignoType.None);
             }
         }
 
-        // Let each impostor know who their fellow impostor(s) are —
-        // sent only to the impostors themselves, no one else.
+        // Let each impostor know who their fellow impostor(s) are
         if (impostorClientIds.Count > 1)
         {
             ClientRpcParams targetImpostorsOnly = new ClientRpcParams
@@ -106,10 +119,21 @@ public class GameStartManager : NetworkBehaviour
         Debug.Log($"[Server] Assigned roles: {actualImpostorCount} Impostor(s) out of {allPlayers.Count} players.");
     }
 
+    private MalignoType PickRandomMalignoType()
+    {
+        if (enabledMalignoTypes == null || enabledMalignoTypes.Count == 0)
+        {
+            Debug.LogWarning("No Maligno types enabled — defaulting to BalBal.");
+            return MalignoType.BalBal;
+        }
+
+        int index = Random.Range(0, enabledMalignoTypes.Count);
+        return enabledMalignoTypes[index];
+    }
+
     [ClientRpc]
     private void NotifyFellowImpostorsClientRpc(ulong[] impostorClientIds, ClientRpcParams rpcParams = default)
     {
-        // Runs only on clients who are themselves impostors (that's who this was sent to).
         Debug.Log($"[Client] Your fellow impostor client IDs: {string.Join(", ", impostorClientIds)}");
         // TODO: use this to highlight teammates in UI, e.g. colored name tags
     }

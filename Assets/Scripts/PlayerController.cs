@@ -134,11 +134,24 @@ public class PlayerController : NetworkBehaviour
             if (hit.gameObject == gameObject) continue;
 
             Killable target = hit.GetComponent<Killable>();
-            if (target != null)
+            if (target == null) continue;
+
+            NetworkObject targetNetObj = hit.GetComponent<NetworkObject>();
+            if (targetNetObj == null) continue;
+
+            // Branch: Bal-bal consumes the body (no reportable corpse).
+            // Every other Maligno type uses the normal kill flow.
+            var balBal = GetComponent<BalBalAbility>();
+            if (balBal != null && balBal.IsMyAbility())
             {
-                RequestKillServerRpc(hit.GetComponent<NetworkObject>().NetworkObjectId);
-                break;
+                balBal.ConsumeBodyServerRpc(targetNetObj.NetworkObjectId);
             }
+            else
+            {
+                RequestKillServerRpc(targetNetObj.NetworkObjectId);
+            }
+
+            break;
         }
     }
 

@@ -35,6 +35,16 @@
                     "interactions": "",
                     "initialStateCheck": false,
                     "priority": 0
+                },
+                {
+                    "name": "Report",
+                    "type": "Button",
+                    "id": "353b6994-8ac7-4a2e-94c6-ba99bade8b4c",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false,
+                    "priority": 0
                 }
             ],
             "bindings": [
@@ -123,6 +133,17 @@
                     "processors": "",
                     "groups": "",
                     "action": "Kill",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "13cf4889-14d0-4ee6-b9b0-ec83254e642b",
+                    "path": "<Keyboard>/r",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Report",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

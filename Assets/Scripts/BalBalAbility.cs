@@ -42,6 +42,7 @@ public class BalBalAbility : NetworkBehaviour
         Vector3 deathPosition = targetObj.transform.position;
 
         targetRole.Kill();
+        targetRole.ServerMarkBalBalConsumed();
         myController?.ServerStartKillCooldown();
 
         SpawnBananaTrunkClientRpc(deathPosition);

@@ -18,6 +18,11 @@ public class GameOverUI : MonoBehaviour
     {
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
         if (gameOverText != null) gameOverText.text = message;
+
+        // The match is over the moment this shows — the in-match HUD
+        // (task panel, USE/REPORT/ABILITY/Call Meeting) has nothing left to
+        // do and shouldn't be visible behind/alongside the result panel.
+        GameHudUI.Instance?.Hide();
     }
 
     // Called by GameStartManager's NotifyReturnedToLobbyClientRpc once the

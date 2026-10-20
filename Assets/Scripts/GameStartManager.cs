@@ -19,6 +19,8 @@ public class GameStartManager : NetworkBehaviour
     [SerializeField] private int thirdEyeUserCount = 1;
     [SerializeField] private int reikiPractitionerCount = 1;
     [SerializeField] private int albularyoCount = 1;
+    [SerializeField] private int babaylanCount = 1;
+    [SerializeField] private int tarotUserCount = 1;
 
     [Header("Maligno Types")]
     [Tooltip("Which folklore roles can be randomly assigned. Uncheck any not built/tested yet.")]
@@ -74,6 +76,7 @@ public class GameStartManager : NetworkBehaviour
     private void NotifyGameStartedClientRpc()
     {
         StartGameButtonUI.Instance?.Hide();
+        GameHudUI.Instance?.Show();
     }
 
     private void AssignRoles()
@@ -157,6 +160,24 @@ public class GameStartManager : NetworkBehaviour
             Debug.Log($"[Server] {allPlayers[nextIndex].gameObject.name} assigned Survivor Class: Albularyo");
             nextIndex++;
         }
+        crewmatesAvailable -= actualAlbularyoCount;
+
+        int actualBabaylanCount = Mathf.Min(babaylanCount, crewmatesAvailable);
+        for (int i = 0; i < actualBabaylanCount; i++)
+        {
+            allPlayers[nextIndex].ServerSetSurvivorClass(SurvivorClass.Babaylan);
+            Debug.Log($"[Server] {allPlayers[nextIndex].gameObject.name} assigned Survivor Class: Babaylan");
+            nextIndex++;
+        }
+        crewmatesAvailable -= actualBabaylanCount;
+
+        int actualTarotUserCount = Mathf.Min(tarotUserCount, crewmatesAvailable);
+        for (int i = 0; i < actualTarotUserCount; i++)
+        {
+            allPlayers[nextIndex].ServerSetSurvivorClass(SurvivorClass.TarotUser);
+            Debug.Log($"[Server] {allPlayers[nextIndex].gameObject.name} assigned Survivor Class: TarotUser");
+            nextIndex++;
+        }
 
         // Let each impostor know who their fellow impostor(s) are
         if (impostorClientIds.Count > 1)
@@ -219,6 +240,7 @@ public class GameStartManager : NetworkBehaviour
             role?.ServerResetForNewGame();
 
             client.PlayerObject.GetComponent<DuwendeAbility>()?.ServerResetForNewGame();
+            client.PlayerObject.GetComponent<BabaylanAbility>()?.ServerResetForNewGame();
         }
 
         TaskManager.Instance?.ServerResetAllTasks();
@@ -235,5 +257,6 @@ public class GameStartManager : NetworkBehaviour
     {
         GameOverUI.Instance?.Hide();
         StartGameButtonUI.Instance?.Show();
+        GameHudUI.Instance?.Hide();
     }
 }

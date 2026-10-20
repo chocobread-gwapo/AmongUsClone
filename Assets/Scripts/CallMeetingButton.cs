@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 // Unity's Button OnClick (Inspector) can only call parameterless methods
@@ -8,6 +9,19 @@ public class CallMeetingButton : MonoBehaviour
 {
     public void OnCallMeetingClicked()
     {
+        // Ghosts can't call meetings — this is just the immediate client-side
+        // UX guard; MeetingManager.RequestCallMeetingServerRpc() re-checks
+        // this server-side too, since that's the actual authority.
+        NetworkObject localPlayer = NetworkManager.Singleton != null
+            ? NetworkManager.Singleton.LocalClient?.PlayerObject
+            : null;
+        PlayerRole localRole = localPlayer != null ? localPlayer.GetComponent<PlayerRole>() : null;
+        if (localRole != null && !localRole.IsAlive)
+        {
+            Debug.Log("[Client] Ghosts can't call meetings.");
+            return;
+        }
+
         if (MeetingManager.Instance != null)
         {
             MeetingManager.Instance.RequestCallMeetingServerRpc();

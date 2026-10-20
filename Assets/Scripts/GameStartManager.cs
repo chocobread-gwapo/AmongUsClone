@@ -14,6 +14,12 @@ public class GameStartManager : NetworkBehaviour
 
     public float KillCooldownDuration => killCooldownDuration;
 
+    [Header("Survivor Classes")]
+    [Tooltip("How many Crewmates get a Survivor Class each match. Picked from the Crewmates left over after Impostors are assigned.")]
+    [SerializeField] private int thirdEyeUserCount = 1;
+    [SerializeField] private int reikiPractitionerCount = 1;
+    [SerializeField] private int albularyoCount = 1;
+
     [Header("Maligno Types")]
     [Tooltip("Which folklore roles can be randomly assigned. Uncheck any not built/tested yet.")]
     [SerializeField]
@@ -119,6 +125,39 @@ public class GameStartManager : NetworkBehaviour
             }
         }
 
+        // allPlayers was already shuffled above, so the Crewmates left after
+        // actualImpostorCount are just as random a pool to draw from. Each
+        // Survivor Class claims its own slice of that pool in turn, so no
+        // Crewmate ever ends up with two Survivor Classes at once.
+        int crewmatesAvailable = allPlayers.Count - actualImpostorCount;
+        int nextIndex = actualImpostorCount;
+
+        int actualThirdEyeCount = Mathf.Min(thirdEyeUserCount, crewmatesAvailable);
+        for (int i = 0; i < actualThirdEyeCount; i++)
+        {
+            allPlayers[nextIndex].ServerSetSurvivorClass(SurvivorClass.ThirdEyeUser);
+            Debug.Log($"[Server] {allPlayers[nextIndex].gameObject.name} assigned Survivor Class: ThirdEyeUser");
+            nextIndex++;
+        }
+        crewmatesAvailable -= actualThirdEyeCount;
+
+        int actualReikiCount = Mathf.Min(reikiPractitionerCount, crewmatesAvailable);
+        for (int i = 0; i < actualReikiCount; i++)
+        {
+            allPlayers[nextIndex].ServerSetSurvivorClass(SurvivorClass.ReikiPractitioner);
+            Debug.Log($"[Server] {allPlayers[nextIndex].gameObject.name} assigned Survivor Class: ReikiPractitioner");
+            nextIndex++;
+        }
+        crewmatesAvailable -= actualReikiCount;
+
+        int actualAlbularyoCount = Mathf.Min(albularyoCount, crewmatesAvailable);
+        for (int i = 0; i < actualAlbularyoCount; i++)
+        {
+            allPlayers[nextIndex].ServerSetSurvivorClass(SurvivorClass.Albularyo);
+            Debug.Log($"[Server] {allPlayers[nextIndex].gameObject.name} assigned Survivor Class: Albularyo");
+            nextIndex++;
+        }
+
         // Let each impostor know who their fellow impostor(s) are
         if (impostorClientIds.Count > 1)
         {
@@ -178,6 +217,8 @@ public class GameStartManager : NetworkBehaviour
 
             PlayerRole role = client.PlayerObject.GetComponent<PlayerRole>();
             role?.ServerResetForNewGame();
+
+            client.PlayerObject.GetComponent<DuwendeAbility>()?.ServerResetForNewGame();
         }
 
         TaskManager.Instance?.ServerResetAllTasks();

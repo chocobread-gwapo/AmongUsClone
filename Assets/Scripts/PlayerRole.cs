@@ -11,9 +11,11 @@ public class PlayerRole : NetworkBehaviour
 {
     private Role serverRole = Role.Crewmate;
     private MalignoType serverMalignoType = MalignoType.None;
+    private SurvivorClass serverSurvivorClass = SurvivorClass.None;
 
     private Role localCachedRole = Role.Crewmate;
     private MalignoType localCachedMalignoType = MalignoType.None;
+    private SurvivorClass localCachedSurvivorClass = SurvivorClass.None;
 
     private NetworkVariable<bool> isAlive = new NetworkVariable<bool>(
         true,
@@ -23,6 +25,7 @@ public class PlayerRole : NetworkBehaviour
 
     public Role CurrentRole => IsServer ? serverRole : localCachedRole;
     public MalignoType CurrentMalignoType => IsServer ? serverMalignoType : localCachedMalignoType;
+    public SurvivorClass CurrentSurvivorClass => IsServer ? serverSurvivorClass : localCachedSurvivorClass;
     public bool IsImpostor => CurrentRole == Role.Impostor;
     public bool IsAlive => isAlive.Value;
 
@@ -59,6 +62,33 @@ public class PlayerRole : NetworkBehaviour
         Debug.Log($"[Client] You are: {role}" + (role == Role.Impostor ? $" ({malignoType})" : ""));
     }
 
+    // Survivor Classes are Crewmate-only and just as private as MalignoType —
+    // same targeted-ClientRpc pattern, separate call since it's set
+    // independently of the base role (assigned after Impostors are picked).
+    public void ServerSetSurvivorClass(SurvivorClass survivorClass)
+    {
+        if (!IsServer) return;
+
+        serverSurvivorClass = survivorClass;
+
+        ClientRpcParams targetOnlyOwner = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
+        };
+
+        ReceiveSurvivorClassClientRpc(survivorClass, targetOnlyOwner);
+    }
+
+    [ClientRpc]
+    private void ReceiveSurvivorClassClientRpc(SurvivorClass survivorClass, ClientRpcParams rpcParams = default)
+    {
+        localCachedSurvivorClass = survivorClass;
+        if (survivorClass != SurvivorClass.None)
+        {
+            Debug.Log($"[Client] Your Survivor Class: {survivorClass}");
+        }
+    }
+
     public void Kill()
     {
         if (!IsServer) return;
@@ -81,6 +111,7 @@ public class PlayerRole : NetworkBehaviour
 
         serverRole = Role.Crewmate;
         serverMalignoType = MalignoType.None;
+        serverSurvivorClass = SurvivorClass.None;
 
         // Only actually triggers HandleAliveChanged if this player was dead —
         // a player who survived the round was already true, so nothing to undo.
@@ -91,6 +122,7 @@ public class PlayerRole : NetworkBehaviour
             Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
         };
         ReceiveRoleClientRpc(Role.Crewmate, MalignoType.None, targetOnlyOwner);
+        ReceiveSurvivorClassClientRpc(SurvivorClass.None, targetOnlyOwner);
     }
 
     private void HandleAliveChanged(bool previous, bool current)

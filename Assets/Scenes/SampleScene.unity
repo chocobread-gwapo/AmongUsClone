@@ -1371,7 +1371,7 @@ MonoBehaviour:
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 0
+  m_RenderPostProcessing: 1
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
@@ -2722,6 +2722,56 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldLabel
   labelText: {fileID: 1649429503}
+  visibilityBuffer: 0.2
+--- !u!1 &749814619
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 749814621}
+  - component: {fileID: 749814620}
+  m_Layer: 0
+  m_Name: Global Volume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &749814620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 749814619}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 0
+  blendDistance: 0
+  weight: 1
+  sharedProfile: {fileID: 11400000, guid: 3f9215ea0144899419cfbc0957140d3f, type: 2}
+--- !u!4 &749814621
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 749814619}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.1869745, y: -0.77532184, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &775526822
 GameObject:
   m_ObjectHideFlags: 0
@@ -2921,6 +2971,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldLabel
   labelText: {fileID: 174037260}
+  visibilityBuffer: 0.2
 --- !u!1 &807960484
 GameObject:
   m_ObjectHideFlags: 0
@@ -2998,6 +3049,51 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 807960484}
   m_CullTransparentMesh: 1
+--- !u!1 &852822577
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 852822578}
+  - component: {fileID: 852822579}
+  m_Layer: 0
+  m_Name: ThirdEyeRevealUI
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &852822578
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 852822577}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1422871827}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &852822579
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 852822577}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ebb755c70625e8e408bf56f0c9101606, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThirdEyeRevealUI
+  residueMarkerPrefab: {fileID: 5095291193812127684, guid: 3f75e169cc2b2a34c8099af72c5356f7, type: 3}
 --- !u!1 &857193417
 GameObject:
   m_ObjectHideFlags: 0
@@ -3652,10 +3748,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 067d6b6b8ecfb544697830bacdb35a85, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AbilityCooldownUI
-  killCooldownRoot: {fileID: 613267529}
-  killCooldownText: {fileID: 0}
-  abilityButton: {fileID: 0}
-  abilityCooldownText: {fileID: 0}
+  killCooldownRoot: {fileID: 158948923}
+  killCooldownText: {fileID: 504376705}
+  abilityButton: {fileID: 613267532}
+  abilityCooldownText: {fileID: 1674440718}
 --- !u!4 &1047945958
 Transform:
   m_ObjectHideFlags: 0
@@ -3664,12 +3760,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1047945956}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 65.8662, y: 747.16895, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 1422871827}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1130848186
 GameObject:
@@ -4144,6 +4240,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldLabel
   labelText: {fileID: 857193419}
+  visibilityBuffer: 0.2
 --- !u!1 &1227024849
 GameObject:
   m_ObjectHideFlags: 0
@@ -4236,7 +4333,10 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   impostorCount: 1
   killCooldownDuration: 15
-  enabledMalignoTypes: 04000000i
+  thirdEyeUserCount: 0
+  reikiPractitionerCount: 0
+  albularyoCount: 1
+  enabledMalignoTypes: 01000000i
 --- !u!114 &1227024854
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4481,6 +4581,40 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 250, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1422871826
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1422871827}
+  m_Layer: 0
+  m_Name: UIs
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1422871827
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1422871826}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 65.8662, y: 747.16895, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1047945958}
+  - {fileID: 1593047919}
+  - {fileID: 852822578}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1432458283
 GameObject:
   m_ObjectHideFlags: 0
@@ -4998,6 +5132,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldLabel
   labelText: {fileID: 1432458285}
+  visibilityBuffer: 0.2
 --- !u!1 &1521438049
 GameObject:
   m_ObjectHideFlags: 0
@@ -5340,6 +5475,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldLabel
   labelText: {fileID: 1733108111}
+  visibilityBuffer: 0.2
 --- !u!114 &1526714091
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5366,6 +5502,51 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRole
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!1 &1593047918
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1593047919}
+  - component: {fileID: 1593047920}
+  m_Layer: 0
+  m_Name: ReikiRevealUI
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1593047919
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1593047918}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1422871827}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1593047920
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1593047918}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f53ca0091f1c4e647b762a7227df7a89, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ReikiRevealUI
+  auraMarkerPrefab: {fileID: 5095291193812127684, guid: 506d6b2aab7a3264085336d9da35eb06, type: 3}
 --- !u!1 &1620585541
 GameObject:
   m_ObjectHideFlags: 0
@@ -6534,7 +6715,7 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: -10
   m_MaskInteraction: 0
   m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -7096,5 +7277,6 @@ SceneRoots:
   - {fileID: 207329750}
   - {fileID: 1674114628}
   - {fileID: 1526714086}
-  - {fileID: 1047945958}
+  - {fileID: 1422871827}
   - {fileID: 1976992003}
+  - {fileID: 749814621}

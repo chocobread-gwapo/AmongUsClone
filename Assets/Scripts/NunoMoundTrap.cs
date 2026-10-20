@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -9,12 +10,17 @@ using UnityEngine;
 public class NunoMoundTrap : NetworkBehaviour
 {
     [Header("Trap Effect")]
+    [Tooltip("How much the curse slows/dims the victim. The curse itself is indefinite now — CurseStatus owns how long it lasts and what happens if it isn't cured (see its Death Timer Seconds field).")]
     [SerializeField] private float slowMultiplier = 0.5f;
-    [SerializeField] private float visionReduction = 0.6f; // TODO: wire into vision system once built
-    [SerializeField] private float effectDuration = 4f;
+    [SerializeField] private float visionReduction = 0.6f;
 
     // Raised server-side so DuwendeAbility can drop this trap from its active-count tracking.
     public event Action<NunoMoundTrap> OnConsumed;
+
+    // Server-only registry of every currently-active trap across all Duwendes —
+    // DuwendeAbility only tracks its own placer's traps, but Third Eye Sight
+    // needs to reveal ALL active traps regardless of who placed them.
+    public static readonly List<NunoMoundTrap> ActiveTraps = new List<NunoMoundTrap>();
 
     private bool triggered = false;
 
@@ -26,6 +32,16 @@ public class NunoMoundTrap : NetworkBehaviour
     private void Awake()
     {
         GetComponent<Collider2D>().isTrigger = true;
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        if (IsServer) ActiveTraps.Add(this);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (IsServer) ActiveTraps.Remove(this);
     }
 
     public void ServerSetPlacer(ulong clientId)
@@ -52,10 +68,23 @@ public class NunoMoundTrap : NetworkBehaviour
 
         triggered = true;
 
-        targetController.ServerApplySlow(slowMultiplier, effectDuration);
-
-        // TODO: once a vision-cone/fog-of-war system exists, also call something like
-        // targetController.ServerApplyVisionReduction(visionReduction, effectDuration);
+        // CurseStatus now owns the whole effect: it applies the persistent
+        // slow + vision reduction itself AND starts the death timer. An
+        // un-healed curse no longer wears off — only Albularyo can end it.
+        CurseStatus curse = other.GetComponent<CurseStatus>();
+        if (curse != null)
+        {
+            curse.ServerApplyCurse(slowMultiplier, visionReduction);
+        }
+        else
+        {
+            // Defensive fallback in case a player is somehow missing
+            // CurseStatus — falls back to the old timed-effect behavior so a
+            // trigger never does nothing at all.
+            Debug.LogWarning($"{other.gameObject.name} has no CurseStatus — applying a one-off timed slow/vision effect instead of a real curse.");
+            targetController.ServerApplySlow(slowMultiplier, 4f);
+            other.GetComponent<PlayerVision>()?.ServerApplyVisionReduction(visionReduction, 4f);
+        }
 
         Debug.Log($"[Server] {other.gameObject.name} triggered a Nuno mound trap.");
 

@@ -293,12 +293,22 @@ public class PlayerController : NetworkBehaviour
         if (!IsOwner || IsBlocked()) return;
 
         var myRole = GetComponent<PlayerRole>();
-        if (myRole == null || !myRole.IsImpostor || !myRole.IsAlive) return;
+        if (myRole == null || !myRole.IsAlive) return;
+
+        // Shared by both Maligno abilities AND Survivor Classes now — each
+        // ability component still gates itself (IsMyAbility()), so calling
+        // all of them is safe; only the one matching this player's actual
+        // role/class does anything.
+        bool hasAnyAbility = myRole.IsImpostor || myRole.CurrentSurvivorClass != SurvivorClass.None;
+        if (!hasAnyAbility) return;
 
         GetComponent<TikbalangAbility>()?.TryActivate();
         GetComponent<DuwendeAbility>()?.TryActivate();
         GetComponent<AswangAbility>()?.TryActivate();
         GetComponent<KapreAbility>()?.TryActivate();
+        GetComponent<ThirdEyeAbility>()?.TryActivate();
+        GetComponent<ReikiAbility>()?.TryActivate();
+        GetComponent<AlbularyoAbility>()?.TryActivate();
     }
 
     [ServerRpc]
@@ -361,6 +371,17 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsServer) return;
         StartCoroutine(ApplySlowRoutine(multiplier, duration));
+    }
+
+    // Called by CurseStatus.ServerCure() (Albularyo's heal) to end a slow
+    // early instead of waiting out its duration. Safe to call even if no
+    // slow is active. The original ApplySlowRoutine's own revert check
+    // (slowMultiplier.Value == multiplier) simply no-ops once this has
+    // already reset it, so there's no conflict between the two.
+    public void ServerClearSlow()
+    {
+        if (!IsServer) return;
+        slowMultiplier.Value = 1f;
     }
 
     private IEnumerator ApplySlowRoutine(float multiplier, float duration)

@@ -3,8 +3,10 @@ using Unity.Netcode;
 using UnityEngine;
 
 // Duwende — Nuno Mound Trap
-// Places a camouflaged trap (max 3 active at once). On trigger: slows the
-// victim 50% and reduces their vision radius 60% for 4s.
+// Places a camouflaged trap (max 3 active at once, AND capped at 3 total for
+// the whole match — a triggered/consumed trap frees up an "active" slot but
+// does NOT refund a use, so Duwende can't just place infinite traps over time
+// by waiting for old ones to get triggered).
 public class DuwendeAbility : NetworkBehaviour
 {
     [Header("Nuno Mound Trap")]
@@ -14,10 +16,18 @@ public class DuwendeAbility : NetworkBehaviour
     [SerializeField] private GameObject trapPrefab;
     [SerializeField] private int maxActiveTraps = 3;
 
+    [Tooltip("Hard cap on how many traps this Duwende can EVER place in one match, regardless of how many have already been triggered/consumed.")]
+    [SerializeField] private int maxTrapsPerMatch = 3;
+
     private PlayerRole myRole;
 
     // Server-only bookkeeping — never synced.
     private readonly List<NunoMoundTrap> activeTraps = new List<NunoMoundTrap>();
+
+    // Server-only — counts UP only, never decrements when a trap is consumed.
+    // This is what actually enforces the per-match cap; activeTraps.Count
+    // only limits how many can be out at the same time.
+    private int totalTrapsPlaced = 0;
 
     private void Awake()
     {
@@ -39,6 +49,12 @@ public class DuwendeAbility : NetworkBehaviour
     private void PlaceTrapServerRpc(Vector3 position)
     {
         if (!IsMyAbility()) return;
+
+        if (totalTrapsPlaced >= maxTrapsPerMatch)
+        {
+            Debug.Log($"[Server] Duwende has used all {maxTrapsPerMatch} traps for this match.");
+            return;
+        }
 
         activeTraps.RemoveAll(t => t == null);
         if (activeTraps.Count >= maxActiveTraps)
@@ -71,12 +87,24 @@ public class DuwendeAbility : NetworkBehaviour
             trap.OnConsumed += HandleTrapConsumed;
         }
 
-        Debug.Log($"[Server] Duwende placed a Nuno mound trap ({activeTraps.Count}/{maxActiveTraps}).");
+        totalTrapsPlaced++;
+
+        Debug.Log($"[Server] Duwende placed a Nuno mound trap ({activeTraps.Count}/{maxActiveTraps} active, {totalTrapsPlaced}/{maxTrapsPerMatch} used this match).");
     }
 
     private void HandleTrapConsumed(NunoMoundTrap trap)
     {
         activeTraps.Remove(trap);
         trap.OnConsumed -= HandleTrapConsumed;
+    }
+
+    // Called by GameStartManager.HostReturnToLobby() so a fresh match gives
+    // Duwende a fresh set of 3 uses, not whatever was left over from last time.
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+
+        activeTraps.Clear();
+        totalTrapsPlaced = 0;
     }
 }

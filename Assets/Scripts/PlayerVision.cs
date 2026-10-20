@@ -11,6 +11,13 @@ using UnityEngine.Rendering.Universal;
 // to use) another player's light to infer their position.
 public class PlayerVision : NetworkBehaviour
 {
+    // The local client's own vision, so other scripts (WorldLabel, for fog-of-war
+    // label gating) can cheaply check "am I within sight?" without doing their
+    // own NetworkManager/PlayerObject lookups every frame.
+    public static PlayerVision LocalInstance { get; private set; }
+
+    public float CurrentVisionRadius => baseVisionRadius * visionMultiplier.Value;
+
     [Header("Vision")]
     [Tooltip("Child Light2D (Point/Freeform) that defines this player's visible radius. Only enabled for the owning client.")]
     [SerializeField] private Light2D visionLight;
@@ -37,12 +44,22 @@ public class PlayerVision : NetworkBehaviour
             visionLight.enabled = IsOwner;
         }
 
+        if (IsOwner)
+        {
+            LocalInstance = this;
+        }
+
         ApplyRadius();
     }
 
     public override void OnNetworkDespawn()
     {
         visionMultiplier.OnValueChanged -= HandleVisionMultiplierChanged;
+
+        if (LocalInstance == this)
+        {
+            LocalInstance = null;
+        }
     }
 
     private void HandleVisionMultiplierChanged(float previous, float current) => ApplyRadius();
@@ -61,6 +78,15 @@ public class PlayerVision : NetworkBehaviour
     {
         if (!IsServer) return;
         StartCoroutine(ApplyVisionReductionRoutine(multiplier, duration));
+    }
+
+    // Called by CurseStatus.ServerCure() (Albularyo's heal) to end a vision
+    // reduction early. Same idempotent-safe shape as PlayerController's
+    // ServerClearSlow — the original routine's own revert check just no-ops.
+    public void ServerClearVisionReduction()
+    {
+        if (!IsServer) return;
+        visionMultiplier.Value = 1f;
     }
 
     private IEnumerator ApplyVisionReductionRoutine(float multiplier, float duration)

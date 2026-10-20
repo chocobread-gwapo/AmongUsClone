@@ -9,6 +9,14 @@ public class PlayerController : NetworkBehaviour
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 3.5f;
 
+    [Header("Server-Side Movement Validation")]
+    [Tooltip("The PRD's hybrid model: the owning client still moves itself locally for responsiveness, but the server periodically checks the resulting position against what should be physically possible, and snaps the client back if it isn't — a speed-hacked or wall-clipped client gets corrected rather than trusted.")]
+    [SerializeField] private float validationInterval = 0.2f;
+    [Tooltip("Multiplier of leeway on top of the theoretical max distance per check, to absorb normal network jitter/lag without false-flagging legitimate movement.")]
+    [SerializeField] private float speedToleranceMultiplier = 1.5f;
+    [Tooltip("Layer(s) a straight-line path between two validated positions is raycast against to catch wall-clipping. Assign whatever layer your Wall_Top/Bottom/Left/Right objects are on.")]
+    [SerializeField] private LayerMask wallLayerMask;
+
     [Header("Input Actions")]
     [SerializeField] private InputActionReference moveAction;
     [SerializeField] private InputActionReference interactAction;
@@ -55,6 +63,10 @@ public class PlayerController : NetworkBehaviour
 
     public TaskZone CurrentTaskZone { get; set; }
 
+    // ---- Server-side movement validation state (server-only, unused on clients) ----
+    private Vector3 serverLastValidatedPosition;
+    private float serverValidationTimer;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -66,6 +78,15 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        if (IsServer)
+        {
+            // Seed with wherever the player actually spawned, so the very
+            // first check doesn't compare against (0,0,0) and false-flag a
+            // "teleport" from the world origin.
+            serverLastValidatedPosition = transform.position;
+            serverValidationTimer = 0f;
+        }
+
         if (!IsOwner)
         {
             enabled = false;
@@ -83,15 +104,37 @@ public class PlayerController : NetworkBehaviour
         reportAction.action.performed += OnReportPressed;
         abilityAction.action.performed += OnAbilityPressed;
 
-        CameraFollow cam = Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null;
-        if (cam != null)
+        StartCoroutine(HookUpCameraWhenReady());
+    }
+
+    // For the host specifically, OnNetworkSpawn fires immediately when
+    // StartHost() runs — which, with Relay/Session matchmaking, is BEFORE
+    // the host's own LoadScene("Game") call finishes swapping out of the
+    // menu scene. A one-shot Camera.main lookup here would find the menu's
+    // camera (no CameraFollow on it) and give up. Instead, keep checking
+    // each frame until the real gameplay camera is loaded in and ready, so
+    // this works regardless of exactly when the scene transition lands
+    // relative to spawn (joining clients are usually already in the right
+    // scene by spawn time, but this covers them too, harmlessly).
+    private IEnumerator HookUpCameraWhenReady()
+    {
+        float timeout = 10f;
+        float elapsed = 0f;
+
+        while (elapsed < timeout)
         {
-            cam.SetTarget(transform);
+            CameraFollow cam = Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null;
+            if (cam != null)
+            {
+                cam.SetTarget(transform);
+                yield break;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
         }
-        else
-        {
-            Debug.LogWarning("Could not find a Main Camera with CameraFollow attached.");
-        }
+
+        Debug.LogWarning("Could not find a Main Camera with CameraFollow attached within 10 seconds of spawning.");
     }
 
     public override void OnNetworkDespawn()
@@ -112,6 +155,14 @@ public class PlayerController : NetworkBehaviour
 
     private void Update()
     {
+        // Server-side validation runs independently of ownership — the host
+        // validates every player's object, not just its own — so this check
+        // comes BEFORE the owner-only early-out below, and has its own.
+        if (IsServer)
+        {
+            ServerValidateMovement();
+        }
+
         if (!IsOwner) return;
 
         if (IsBlocked())
@@ -268,7 +319,10 @@ public class PlayerController : NetworkBehaviour
             PlayerRole targetRole = hit.GetComponent<PlayerRole>();
             NetworkObject targetNetObj = hit.GetComponent<NetworkObject>();
 
-            if (targetRole != null && !targetRole.IsAlive && targetNetObj != null)
+            // Bal-bal's consumed victims leave no trace — same client-side UX
+            // nicety pattern as the ghost checks elsewhere; MeetingManager's
+            // server-side check is the real authority either way.
+            if (targetRole != null && !targetRole.IsAlive && !targetRole.IsBalBalConsumed && targetNetObj != null)
             {
                 MeetingManager.Instance.RequestReportBodyServerRpc(targetNetObj.NetworkObjectId);
                 break;
@@ -309,6 +363,7 @@ public class PlayerController : NetworkBehaviour
         GetComponent<ThirdEyeAbility>()?.TryActivate();
         GetComponent<ReikiAbility>()?.TryActivate();
         GetComponent<AlbularyoAbility>()?.TryActivate();
+        GetComponent<TarotUserAbility>()?.TryActivate();
     }
 
     [ServerRpc]
@@ -357,6 +412,74 @@ public class PlayerController : NetworkBehaviour
         localKillCooldownEndTime = Time.time + duration;
         Debug.Log($"[Client] Kill used — {duration}s cooldown.");
         AbilityCooldownUI.Instance?.StartKillCooldown(duration);
+    }
+
+    // ---- Server-side movement validation (the PRD's hybrid anti-cheat model) ----
+    // The owning client still moves itself every frame for responsiveness —
+    // nothing changes about movement FEEL. Periodically (every
+    // validationInterval seconds), the server checks the distance actually
+    // covered against the theoretical max for this player's CURRENT status
+    // (moveSpeed * slowMultiplier — this already accounts for Duwende/Kapre
+    // slows AND Tarot's Fool speed boost, since both write through the same
+    // NetworkVariable), with a tolerance multiplier to absorb normal network
+    // jitter. It also raycasts the straight-line path against wallLayerMask
+    // to catch wall-clipping. Either violation snaps the offending client
+    // back to its last validated position via a targeted ClientRpc.
+    private void ServerValidateMovement()
+    {
+        serverValidationTimer += Time.deltaTime;
+        if (serverValidationTimer < validationInterval) return;
+
+        float elapsed = serverValidationTimer;
+        serverValidationTimer = 0f;
+
+        Vector3 currentPosition = transform.position;
+        float distanceMoved = Vector2.Distance(serverLastValidatedPosition, currentPosition);
+
+        float maxAllowedSpeed = moveSpeed * slowMultiplier.Value * speedToleranceMultiplier;
+        float maxAllowedDistance = maxAllowedSpeed * elapsed;
+
+        bool speedViolation = distanceMoved > maxAllowedDistance;
+
+        bool wallViolation = false;
+        if (!speedViolation && distanceMoved > 0.001f)
+        {
+            Vector2 direction = (currentPosition - serverLastValidatedPosition).normalized;
+            RaycastHit2D hit = Physics2D.Raycast(serverLastValidatedPosition, direction, distanceMoved, wallLayerMask);
+            wallViolation = hit.collider != null;
+        }
+
+        if (speedViolation || wallViolation)
+        {
+            Debug.LogWarning($"[Server] Movement violation for {gameObject.name}: " +
+                $"{(speedViolation ? $"moved {distanceMoved:F2} units in {elapsed:F2}s (max {maxAllowedDistance:F2})" : "wall-clip detected")}. Correcting.");
+
+            transform.position = serverLastValidatedPosition;
+            if (rb != null) rb.linearVelocity = Vector2.zero;
+
+            CorrectPositionClientRpc(serverLastValidatedPosition);
+            // lastValidatedPosition stays where it was — don't advance it to
+            // the rejected position.
+        }
+        else
+        {
+            serverLastValidatedPosition = currentPosition;
+        }
+    }
+
+    // Targeted at the offending client only — everyone else already sees the
+    // server's authoritative (reverted) position via the owner's own
+    // NetworkTransform re-syncing once its transform.position is forced back.
+    [ClientRpc]
+    private void CorrectPositionClientRpc(Vector3 correctedPosition, ClientRpcParams rpcParams = default)
+    {
+        if (!IsOwner) return;
+
+        transform.position = correctedPosition;
+        if (rb != null) rb.linearVelocity = Vector2.zero;
+        moveInput = Vector2.zero;
+
+        Debug.LogWarning("[Client] Movement corrected by server (speed or wall-clip check failed).");
     }
 
     // ---- Called by ability scripts (server-side only) to apply status effects ----

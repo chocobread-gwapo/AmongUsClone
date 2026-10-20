@@ -67,3 +67,9 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Unity VCS / editor process lock files (e.g. state\inuse.26572.lock) —
+# transient, PID-specific, and will just cause spurious diffs/conflicts
+# if committed.
+/state/
+*.lock

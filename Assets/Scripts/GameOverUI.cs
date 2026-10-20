@@ -19,4 +19,20 @@ public class GameOverUI : MonoBehaviour
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
         if (gameOverText != null) gameOverText.text = message;
     }
+
+    // Called by GameStartManager's NotifyReturnedToLobbyClientRpc once the
+    // host has reset match state, so the panel clears for everyone.
+    public void Hide()
+    {
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+    }
+
+    // Wired to the "Return to Lobby" button's OnClick inside GameOverPanel —
+    // same bridge pattern as CallMeetingButton/UseButton: only the host's
+    // click actually does anything (GameStartManager.HostReturnToLobby() is
+    // server-gated internally), everyone else's click is a harmless no-op.
+    public void OnReturnToLobbyClicked()
+    {
+        GameStartManager.Instance?.HostReturnToLobby();
+    }
 }

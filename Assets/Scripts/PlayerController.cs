@@ -281,7 +281,14 @@ public class PlayerController : NetworkBehaviour
     // will actually do anything — each one gates itself via IsMyAbility(),
     // the same pattern BalBalAbility already uses. Bal-bal is excluded here
     // since "eating the body" is wired through the kill button instead.
-    private void OnAbilityPressed(InputAction.CallbackContext context)
+    private void OnAbilityPressed(InputAction.CallbackContext context) => TryUseAbility();
+
+    // On-screen ABILITY button entry point — same bridge pattern as
+    // OnUseButtonPressed/OnReportButtonPressed, so the keyboard binding and
+    // the UI button both funnel through the exact same logic.
+    public void OnAbilityButtonPressed() => TryUseAbility();
+
+    private void TryUseAbility()
     {
         if (!IsOwner || IsBlocked()) return;
 
@@ -339,7 +346,7 @@ public class PlayerController : NetworkBehaviour
         if (!IsOwner) return;
         localKillCooldownEndTime = Time.time + duration;
         Debug.Log($"[Client] Kill used — {duration}s cooldown.");
-        // TODO: AbilityCooldownUI.Instance?.StartKillCooldown(duration);
+        AbilityCooldownUI.Instance?.StartKillCooldown(duration);
     }
 
     // ---- Called by ability scripts (server-side only) to apply status effects ----

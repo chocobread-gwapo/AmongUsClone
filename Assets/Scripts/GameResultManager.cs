@@ -84,4 +84,12 @@ public class GameResultManager : NetworkBehaviour
         Debug.Log($"[Client] GAME OVER: {message}");
         GameOverUI.Instance?.Show(message);
     }
+
+    // Called by GameStartManager.HostReturnToLobby() — clears the ended flag
+    // so GameResultManager.CheckWinConditions() can evaluate again next match.
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+        gameEnded.Value = false;
+    }
 }

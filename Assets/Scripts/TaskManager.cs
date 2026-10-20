@@ -88,4 +88,19 @@ public class TaskManager : NetworkBehaviour
         // task bar, which is a Crewmate win condition.
         GameResultManager.Instance?.CheckWinConditions();
     }
+
+    // Called by GameStartManager.HostReturnToLobby() — marks every tracked
+    // task incomplete again and resets the counter, so the same task set can
+    // be played again next match without re-discovering tasks via triggers.
+    public void ServerResetAllTasks()
+    {
+        if (!IsServer) return;
+
+        foreach (var task in allTasks)
+        {
+            task?.ServerResetForNewGame();
+        }
+
+        completedTasks.Value = 0;
+    }
 }

@@ -14,6 +14,12 @@ public class KapreAbility : NetworkBehaviour
     [SerializeField] private float smokeDuration = 8f;
     [SerializeField] private float cooldownDuration = 30f;
 
+    [Header("Vision Obscuration")]
+    [Tooltip("Radius around the cast point that gets checked for players to obscure.")]
+    [SerializeField] private float smokeVisionRadius = 2.5f;
+    [Tooltip("Vision-radius multiplier applied to anyone caught in the smoke (0.35 = 35% of normal vision).")]
+    [SerializeField] private float smokeVisionMultiplier = 0.35f;
+
     private PlayerRole myRole;
 
     // Server-only.
@@ -42,9 +48,38 @@ public class KapreAbility : NetworkBehaviour
         if (Time.time < serverCooldownEndTime) return;
 
         serverCooldownEndTime = Time.time + cooldownDuration;
+        NotifyCooldownStartedClientRpc(cooldownDuration);
 
         Debug.Log("[Server] Kapre conjured a smokescreen.");
         SpawnSmokeClientRpc(position, smokeDuration, OwnerClientId);
+
+        ObscureVisionNearby(position);
+    }
+
+    // Shrinks the vision radius of anyone caught in the smoke at the moment
+    // it's cast — the Kapre itself is skipped, since they can see through
+    // their own smoke. Doesn't follow players who walk in afterward; that's
+    // a reasonable first pass and can be made trigger-based later if needed.
+    private void ObscureVisionNearby(Vector3 position)
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(position, smokeVisionRadius);
+        foreach (var hit in hits)
+        {
+            if (hit.gameObject == gameObject) continue;
+
+            PlayerVision targetVision = hit.GetComponent<PlayerVision>();
+            targetVision?.ServerApplyVisionReduction(smokeVisionMultiplier, smokeDuration);
+        }
+    }
+
+    // Targeted at the Kapre's own owner only — same pattern as the other
+    // three abilities, so the shared Ability-cooldown UI picks it up.
+    [ClientRpc]
+    private void NotifyCooldownStartedClientRpc(float duration)
+    {
+        if (!IsOwner) return;
+        Debug.Log($"[Client] Tabako Smoke used — {duration}s cooldown.");
+        AbilityCooldownUI.Instance?.StartAbilityCooldown(duration);
     }
 
     // Every client spawns its own local smoke prop, except the Kapre's own

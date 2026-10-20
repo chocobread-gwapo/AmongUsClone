@@ -98,12 +98,23 @@ public class AswangAbility : NetworkBehaviour
         string targetName = $"Player {targetObj.OwnerClientId + 1}";
 
         serverCooldownEndTime = Time.time + cooldownDuration;
+        NotifyCooldownStartedClientRpc(cooldownDuration);
 
         disguiseLabel.Value = targetName;
         disguiseColor.Value = targetSprite != null ? targetSprite.color : Color.white;
         disguiseActive.Value = true;
 
         StartCoroutine(RevertAfter(disguiseDuration));
+    }
+
+    // Targeted at the Aswang's own owner only, same pattern as Tikbalang's —
+    // the cooldown UI listens here, nothing secret leaks to other clients.
+    [ClientRpc]
+    private void NotifyCooldownStartedClientRpc(float duration)
+    {
+        if (!IsOwner) return;
+        Debug.Log($"[Client] Anyo used — {duration}s cooldown.");
+        AbilityCooldownUI.Instance?.StartAbilityCooldown(duration);
     }
 
     private IEnumerator RevertAfter(float duration)

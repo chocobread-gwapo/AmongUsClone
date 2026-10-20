@@ -92,4 +92,12 @@ public class TaskZone : NetworkBehaviour
 
         TaskManager.Instance?.ServerReportTaskCompleted(this);
     }
+
+    // Called by TaskManager.ServerResetAllTasks() when returning to the lobby,
+    // so the same task set can be completed again next match.
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+        isComplete.Value = false;
+    }
 }

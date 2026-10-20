@@ -85,6 +85,6 @@ public class TikbalangAbility : NetworkBehaviour
     {
         if (!IsOwner) return;
         Debug.Log($"[Client] Liligawin used — {duration}s cooldown.");
-        // TODO: AbilityCooldownUI.Instance?.StartCooldown(duration);
+        AbilityCooldownUI.Instance?.StartAbilityCooldown(duration);
     }
 }

@@ -60,6 +60,14 @@ public class GameStartManager : NetworkBehaviour
 
         AssignRoles();
         gameStarted.Value = true;
+
+        NotifyGameStartedClientRpc();
+    }
+
+    [ClientRpc]
+    private void NotifyGameStartedClientRpc()
+    {
+        StartGameButtonUI.Instance?.Hide();
     }
 
     private void AssignRoles()
@@ -141,5 +149,50 @@ public class GameStartManager : NetworkBehaviour
     {
         Debug.Log($"[Client] Your fellow impostor client IDs: {string.Join(", ", impostorClientIds)}");
         // TODO: use this to highlight teammates in UI, e.g. colored name tags
+    }
+
+    // ---- Return to lobby ----
+    // Wired to the GameOverPanel's "Return to Lobby" button. Only actually
+    // does anything when called on the host/server's own instance — same
+    // host-gated pattern as HostStartGame() above, so every client can safely
+    // call this without a ServerRpc wrapper.
+    public void HostReturnToLobby()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("Only the host/server can return everyone to the lobby.");
+            return;
+        }
+
+        if (GameResultManager.Instance == null || !GameResultManager.Instance.GameEnded)
+        {
+            Debug.LogWarning("Can't return to lobby before the match has ended.");
+            return;
+        }
+
+        // Reset every connected player: alive again, Crewmate until next
+        // AssignRoles(), controls re-enabled.
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            if (client.PlayerObject == null) continue;
+
+            PlayerRole role = client.PlayerObject.GetComponent<PlayerRole>();
+            role?.ServerResetForNewGame();
+        }
+
+        TaskManager.Instance?.ServerResetAllTasks();
+        GameResultManager.Instance?.ServerResetForNewGame();
+
+        gameStarted.Value = false;
+
+        Debug.Log("[Server] Returned to lobby — ready for a new match.");
+        NotifyReturnedToLobbyClientRpc();
+    }
+
+    [ClientRpc]
+    private void NotifyReturnedToLobbyClientRpc()
+    {
+        GameOverUI.Instance?.Hide();
+        StartGameButtonUI.Instance?.Show();
     }
 }

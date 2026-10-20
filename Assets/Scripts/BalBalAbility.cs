@@ -25,15 +25,24 @@ public class BalBalAbility : NetworkBehaviour
     {
         if (!IsMyAbility()) return;
 
+        // Bal-bal's "eat the body" is still a kill — shares the same
+        // kill-cooldown clock as the normal kill button, not a separate one.
+        PlayerController myController = GetComponent<PlayerController>();
+        if (myController != null && myController.ServerIsKillOnCooldown()) return;
+
         if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObj))
             return;
 
         PlayerRole targetRole = targetObj.GetComponent<PlayerRole>();
         if (targetRole == null || !targetRole.IsAlive) return;
 
+        // Maligno never consume a fellow Maligno's body.
+        if (targetRole.IsImpostor) return;
+
         Vector3 deathPosition = targetObj.transform.position;
 
         targetRole.Kill();
+        myController?.ServerStartKillCooldown();
 
         SpawnBananaTrunkClientRpc(deathPosition);
     }

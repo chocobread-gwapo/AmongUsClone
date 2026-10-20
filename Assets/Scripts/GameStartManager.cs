@@ -9,6 +9,11 @@ public class GameStartManager : NetworkBehaviour
     [Header("Match Settings")]
     [SerializeField] private int impostorCount = 1;
 
+    [Tooltip("How long an Impostor must wait between kills. PRD suggests 15 / 22.5 / 30 / 45 as preset options.")]
+    [SerializeField] private float killCooldownDuration = 15f;
+
+    public float KillCooldownDuration => killCooldownDuration;
+
     [Header("Maligno Types")]
     [Tooltip("Which folklore roles can be randomly assigned. Uncheck any not built/tested yet.")]
     [SerializeField]

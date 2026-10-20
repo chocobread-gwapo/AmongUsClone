@@ -10,8 +10,6 @@ public class TaskManager : NetworkBehaviour
     [Header("Task Tracking")]
     [SerializeField] private List<TaskZone> allTasks = new List<TaskZone>();
 
-    // NetworkVariable: the server owns the real value, and it auto-syncs
-    // to every connected client whenever it changes.
     private NetworkVariable<int> completedTasks = new NetworkVariable<int>(
         0,
         NetworkVariableReadPermission.Everyone,
@@ -28,7 +26,6 @@ public class TaskManager : NetworkBehaviour
     public int TotalTasks => totalTasks.Value;
     public int TasksRemaining => TotalTasks - CompletedTasks;
 
-    // Local events UI still subscribes to, same as before
     public static event Action<int, int> OnTaskProgressChanged;
     public static event Action OnAllTasksCompleted;
 
@@ -44,7 +41,6 @@ public class TaskManager : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // Listen for changes on ALL clients (including host) so UI updates everywhere
         completedTasks.OnValueChanged += HandleProgressChanged;
 
         if (IsServer)
@@ -57,7 +53,6 @@ public class TaskManager : NetworkBehaviour
             completedTasks.Value = 0;
         }
 
-        // Fire once on spawn so UI has correct initial values immediately
         OnTaskProgressChanged?.Invoke(CompletedTasks, TotalTasks);
     }
 
@@ -76,8 +71,6 @@ public class TaskManager : NetworkBehaviour
         }
     }
 
-    // Called via ServerRpc from TaskZone when a player completes a task.
-    // Only the server is allowed to actually increment the NetworkVariable.
     public void ServerReportTaskCompleted(TaskZone task)
     {
         if (!IsServer) return;
@@ -90,5 +83,9 @@ public class TaskManager : NetworkBehaviour
 
         completedTasks.Value++;
         Debug.Log($"[Server] Tasks complete: {completedTasks.Value}/{totalTasks.Value}");
+
+        // NEW — completing a task might be the one that finishes the whole
+        // task bar, which is a Crewmate win condition.
+        GameResultManager.Instance?.CheckWinConditions();
     }
 }

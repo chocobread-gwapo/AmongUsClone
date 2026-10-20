@@ -9,11 +9,9 @@ public enum Role
 
 public class PlayerRole : NetworkBehaviour
 {
-    // Server-authoritative, never directly synced — see ServerSetRole/ServerSetMalignoType
     private Role serverRole = Role.Crewmate;
     private MalignoType serverMalignoType = MalignoType.None;
 
-    // Each client's own cached copy of ITS OWN role/type, set only via targeted ClientRpc
     private Role localCachedRole = Role.Crewmate;
     private MalignoType localCachedMalignoType = MalignoType.None;
 
@@ -38,7 +36,6 @@ public class PlayerRole : NetworkBehaviour
         isAlive.OnValueChanged -= HandleAliveChanged;
     }
 
-    // Called ONLY by the server during role assignment (GameStartManager)
     public void ServerSetRole(Role role, MalignoType malignoType = MalignoType.None)
     {
         if (!IsServer) return;
@@ -52,10 +49,6 @@ public class PlayerRole : NetworkBehaviour
         };
 
         ReceiveRoleClientRpc(role, malignoType, targetOnlyOwner);
-
-        // Enable the matching ability component, server-side, if one exists.
-        // Each ability script checks CurrentMalignoType itself and no-ops if it doesn't match,
-        // so it's safe to just leave all of them present on the prefab and let them self-gate.
     }
 
     [ClientRpc]
@@ -73,6 +66,10 @@ public class PlayerRole : NetworkBehaviour
 
         isAlive.Value = false;
         Debug.Log($"{gameObject.name} was eliminated.");
+
+        // NEW — a death (from a direct kill OR a meeting ejection, since both
+        // call this same method) can end the match, so check right after.
+        GameResultManager.Instance?.CheckWinConditions();
     }
 
     private void HandleAliveChanged(bool previous, bool current)

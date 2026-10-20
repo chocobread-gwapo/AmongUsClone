@@ -8,6 +8,9 @@ public class TaskZone : NetworkBehaviour
     [Header("Task Settings")]
     [SerializeField] private string taskName = "Task";
 
+    [Tooltip("Optional room/location label shown before the task name in the breakdown panel, e.g. \"Storage\" for \"Storage: Fuel Engines\". Leave blank to show just the task name.")]
+    [SerializeField] private string roomName = "";
+
     // Synced so every client knows if this specific task is already done
     // (prevents two players both "completing" the same task)
     private NetworkVariable<bool> isComplete = new NetworkVariable<bool>(
@@ -21,6 +24,7 @@ public class TaskZone : NetworkBehaviour
 
     public bool IsComplete => isComplete.Value;
     public string TaskName => taskName;
+    public string RoomName => roomName;
 
     private void Awake()
     {
@@ -29,9 +33,6 @@ public class TaskZone : NetworkBehaviour
 
         if (promptIndicator != null)
             promptIndicator.SetActive(false);
-
-        // NEW — set the floating label to this task's name, e.g. "Wiring"
-        GetComponent<WorldLabel>()?.SetLabel(taskName);
     }
 
     public override void OnNetworkSpawn()

@@ -44,6 +44,27 @@ public class PlayerController : NetworkBehaviour
     private Vector2 moveInput;
     private Vector2 facingDirection = Vector2.down;
 
+    // Networked so CharacterSpriteAnimator can play the right walk-cycle
+    // frames for THIS player on every OTHER client, not just locally.
+    // Owner-write (not server-write) because this is pure cosmetic input
+    // state, not anti-cheat-relevant — same "owner drives it locally"
+    // reasoning as moveInput/facingDirection above, just made visible to
+    // everyone instead of staying owner-only.
+    private NetworkVariable<Direction4> networkFacing = new NetworkVariable<Direction4>(
+        Direction4.Down,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Owner
+    );
+
+    private NetworkVariable<bool> networkIsMoving = new NetworkVariable<bool>(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Owner
+    );
+
+    public Direction4 NetworkFacing => networkFacing.Value;
+    public bool NetworkIsMoving => networkIsMoving.Value;
+
     // ---- Ability-driven status effects ----
     // Synced to everyone on purpose: these are visible effects (the victim's own
     // movement looks/feels different to everyone watching), not secret information,
@@ -168,6 +189,9 @@ public class PlayerController : NetworkBehaviour
         if (IsBlocked())
         {
             moveInput = Vector2.zero;
+            // Still sync "not moving" so other clients don't see this
+            // player frozen mid-walk-cycle for the rest of the meeting.
+            if (networkIsMoving.Value) networkIsMoving.Value = false;
             return;
         }
 
@@ -179,10 +203,31 @@ public class PlayerController : NetworkBehaviour
             moveInput = -moveInput;
         }
 
-        if (moveInput.sqrMagnitude > 0.01f)
+        bool isMoving = moveInput.sqrMagnitude > 0.01f;
+        if (isMoving)
         {
             facingDirection = moveInput.normalized;
         }
+
+        // Owner writes the networked facing/moving state every frame it
+        // changes, so CharacterSpriteAnimator on OTHER clients can animate
+        // this player correctly. NetworkVariable already no-ops/dedupes
+        // when the value hasn't actually changed, so writing every frame
+        // here is fine — it just compares, not re-broadcasts needlessly.
+        Direction4 newFacing = DirectionFromVector(facingDirection);
+        if (networkFacing.Value != newFacing) networkFacing.Value = newFacing;
+        if (networkIsMoving.Value != isMoving) networkIsMoving.Value = isMoving;
+    }
+
+    // Picks whichever axis the facing vector leans more strongly toward —
+    // standard 4-direction sprite convention (no diagonal frames to pick between).
+    private static Direction4 DirectionFromVector(Vector2 direction)
+    {
+        if (Mathf.Abs(direction.x) > Mathf.Abs(direction.y))
+        {
+            return direction.x > 0f ? Direction4.Right : Direction4.Left;
+        }
+        return direction.y > 0f ? Direction4.Up : Direction4.Down;
     }
 
     private void FixedUpdate()

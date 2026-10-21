@@ -87,11 +87,14 @@ public class PlayerRole : NetworkBehaviour
             Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
         };
 
-        ReceiveRoleClientRpc(role, malignoType, targetOnlyOwner);
+        // true here (a real assignment) vs. false from ServerResetForNewGame()
+        // below (a reset back to Crewmate) — see that method for why this
+        // flag exists.
+        ReceiveRoleClientRpc(role, malignoType, true, targetOnlyOwner);
     }
 
     [ClientRpc]
-    private void ReceiveRoleClientRpc(Role role, MalignoType malignoType, ClientRpcParams rpcParams = default)
+    private void ReceiveRoleClientRpc(Role role, MalignoType malignoType, bool showReveal, ClientRpcParams rpcParams = default)
     {
         localCachedRole = role;
         localCachedMalignoType = malignoType;
@@ -104,6 +107,14 @@ public class PlayerRole : NetworkBehaviour
         // Role.Crewmate), so the button correctly hides again on return to
         // lobby without any extra code there.
         KillButton.Instance?.SetVisible(role == Role.Impostor);
+
+        // showReveal is false on a lobby reset — only a REAL assignment at
+        // match start should pop the "you are X" screen.
+        if (showReveal)
+        {
+            Sprite portrait = GetComponent<CharacterSpriteAnimator>()?.GetPortraitSprite();
+            RoleRevealUI.Instance?.ShowRole(role == Role.Impostor, malignoType, portrait);
+        }
     }
 
     // Survivor Classes are Crewmate-only and just as private as MalignoType —
@@ -120,16 +131,23 @@ public class PlayerRole : NetworkBehaviour
             Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
         };
 
-        ReceiveSurvivorClassClientRpc(survivorClass, targetOnlyOwner);
+        ReceiveSurvivorClassClientRpc(survivorClass, true, targetOnlyOwner);
     }
 
     [ClientRpc]
-    private void ReceiveSurvivorClassClientRpc(SurvivorClass survivorClass, ClientRpcParams rpcParams = default)
+    private void ReceiveSurvivorClassClientRpc(SurvivorClass survivorClass, bool showReveal, ClientRpcParams rpcParams = default)
     {
         localCachedSurvivorClass = survivorClass;
         if (survivorClass != SurvivorClass.None)
         {
             Debug.Log($"[Client] Your Survivor Class: {survivorClass}");
+        }
+
+        // Same reasoning as ReceiveRoleClientRpc's showReveal — only a real
+        // assignment should extend the reveal panel, not a lobby reset.
+        if (showReveal)
+        {
+            RoleRevealUI.Instance?.AppendSurvivorClass(survivorClass);
         }
     }
 
@@ -195,8 +213,8 @@ public class PlayerRole : NetworkBehaviour
         {
             Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
         };
-        ReceiveRoleClientRpc(Role.Crewmate, MalignoType.None, targetOnlyOwner);
-        ReceiveSurvivorClassClientRpc(SurvivorClass.None, targetOnlyOwner);
+        ReceiveRoleClientRpc(Role.Crewmate, MalignoType.None, false, targetOnlyOwner);
+        ReceiveSurvivorClassClientRpc(SurvivorClass.None, false, targetOnlyOwner);
     }
 
     // Ghost/Spirit state: a dead player keeps moving and can still finish

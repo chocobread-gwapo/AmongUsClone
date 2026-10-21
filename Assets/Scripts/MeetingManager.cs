@@ -8,6 +8,7 @@ public class MeetingManager : NetworkBehaviour
     public static MeetingManager Instance { get; private set; }
 
     [Header("Meeting Settings")]
+    [Tooltip("Fallback used only if GameStartManager isn't found — normal play reads GameStartManager.Instance.MeetingDuration instead, so the Host Settings Panel's value actually takes effect.")]
     [SerializeField] private float votingDuration = 30f;
     [SerializeField] private float reportRange = 1.5f;
 
@@ -51,7 +52,24 @@ public class MeetingManager : NetworkBehaviour
         if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(bodyNetworkObjectId, out NetworkObject bodyObj))
             return;
 
-        PlayerRole bodyRole = bodyObj.GetComponent<PlayerRole>();
+        // bodyNetworkObjectId now usually points at a stationary DeadBody
+        // marker rather than the dead player's own object (ghosts keep
+        // moving after death, so the body can't just be them) — resolve
+        // back to the real PlayerRole it represents either way, so the
+        // Bal-Bal / alive checks below stay exactly as they were.
+        PlayerRole bodyRole;
+        DeadBody deadBody = bodyObj.GetComponent<DeadBody>();
+        if (deadBody != null)
+        {
+            if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(deadBody.OriginalPlayerId, out NetworkObject originalPlayerObj))
+                return;
+            bodyRole = originalPlayerObj.GetComponent<PlayerRole>();
+        }
+        else
+        {
+            bodyRole = bodyObj.GetComponent<PlayerRole>();
+        }
+
         if (bodyRole == null || bodyRole.IsAlive) return; // can't report a living player
 
         // Bal-bal's victim leaves no trace — the real body is never
@@ -83,9 +101,21 @@ public class MeetingManager : NetworkBehaviour
 
     // ---------- Core meeting flow ----------
 
+    // Server-only — when this meeting actually started, so ResolveVotes()/
+    // ResolveJudgment() can work out exactly how long it ran and give that
+    // time back to everyone's cooldowns.
+    private float serverMeetingStartTime;
+
     private void StartMeeting()
     {
         if (!IsServer || isMeetingActive.Value) return;
+
+        // Matches the familiar "body disappears once the meeting begins"
+        // behavior, whether this meeting was triggered by a report or an
+        // emergency call.
+        DeadBody.DespawnAll();
+
+        serverMeetingStartTime = Time.time;
 
         votes.Clear();
         isMeetingActive.Value = true;
@@ -94,9 +124,39 @@ public class MeetingManager : NetworkBehaviour
         votingCoroutine = StartCoroutine(VotingTimer());
     }
 
+    // Pushes every connected player's currently-active cooldowns (kill +
+    // every ability) forward by exactly how long this meeting ran. Meetings
+    // already block kills/abilities entirely (PlayerController.IsBlocked()),
+    // so without this, time spent in a meeting would just silently eat into
+    // a cooldown the player never got a chance to use. Only touches a
+    // cooldown that's actually still counting down right now — a player
+    // with nothing on cooldown is left untouched. The client-side countdown
+    // (AbilityCooldownUI) independently freezes itself while a meeting is
+    // active, so the two stay in sync without needing an extra RPC here.
+    private void ExtendAllCooldownsByMeetingDuration()
+    {
+        float elapsed = Time.time - serverMeetingStartTime;
+        if (elapsed <= 0f) return;
+
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            if (client.PlayerObject == null) continue;
+
+            client.PlayerObject.GetComponent<PlayerController>()?.ServerExtendKillCooldownIfActive(elapsed);
+            client.PlayerObject.GetComponent<TikbalangAbility>()?.ServerExtendCooldownIfActive(elapsed);
+            client.PlayerObject.GetComponent<AswangAbility>()?.ServerExtendCooldownIfActive(elapsed);
+            client.PlayerObject.GetComponent<KapreAbility>()?.ServerExtendCooldownIfActive(elapsed);
+            client.PlayerObject.GetComponent<ThirdEyeAbility>()?.ServerExtendCooldownIfActive(elapsed);
+            client.PlayerObject.GetComponent<ReikiAbility>()?.ServerExtendCooldownIfActive(elapsed);
+            client.PlayerObject.GetComponent<AlbularyoAbility>()?.ServerExtendCooldownIfActive(elapsed);
+            client.PlayerObject.GetComponent<TarotUserAbility>()?.ServerExtendCooldownIfActive(elapsed);
+        }
+    }
+
     private IEnumerator VotingTimer()
     {
-        yield return new WaitForSeconds(votingDuration);
+        float duration = GameStartManager.Instance != null ? GameStartManager.Instance.MeetingDuration : votingDuration;
+        yield return new WaitForSeconds(duration);
         ResolveVotes();
     }
 
@@ -194,6 +254,7 @@ public class MeetingManager : NetworkBehaviour
             AnnounceResultsClientRpc(ejectedName, ejectedWasImpostor, isTie || ejectedClientId == SKIP_VOTE);
         }
 
+        ExtendAllCooldownsByMeetingDuration();
         votes.Clear();
         isMeetingActive.Value = false;
     }
@@ -251,6 +312,7 @@ public class MeetingManager : NetworkBehaviour
             AnnounceJudgmentResultClientRpc(judgeRole.gameObject.name, targetRole.gameObject.name, guessWasCorrect, banishedName);
         }
 
+        ExtendAllCooldownsByMeetingDuration();
         votes.Clear();
         isMeetingActive.Value = false;
     }

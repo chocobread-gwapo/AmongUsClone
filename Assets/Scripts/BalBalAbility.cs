@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -5,6 +6,20 @@ public class BalBalAbility : NetworkBehaviour
 {
     [Header("Banana Trunk Prop")]
     [SerializeField] private GameObject bananaTrunkPropPrefab;
+
+    // The prop is spawned with a plain local Instantiate() (see
+    // SpawnBananaTrunkClientRpc below) — it's purely cosmetic, so it was
+    // never worth making it its own NetworkObject. That also means nothing
+    // ever destroyed it on its own, so every decoy from every past match
+    // just kept piling up. This tracks every instance THIS client has ever
+    // spawned so ClearAllTrunks() can wipe them on return to lobby. Static
+    // (not per-player) since any client might render decoys spawned by any
+    // Bal-bal's ClientRpc, and it needs to survive this component being
+    // destroyed/recreated between scenes.
+    private static readonly List<GameObject> spawnedTrunks = new List<GameObject>();
+
+    [Tooltip("How close a target needs to be for Bal-bal to consume them via the ABILITY button. Match this to the KILL button's own range so the two feel consistent.")]
+    [SerializeField] private float targetRange = 1.2f;
 
     private PlayerRole myRole;
 
@@ -16,6 +31,31 @@ public class BalBalAbility : NetworkBehaviour
     public bool IsMyAbility()
     {
         return myRole != null && myRole.CurrentMalignoType == MalignoType.BalBal;
+    }
+
+    // ABILITY-button entry point — same owner-side target-finding pattern as
+    // every other ability (see AswangAbility.TryActivate()). The KILL button
+    // no longer special-cases Bal-bal at all; this is now the only way to
+    // "eat" a victim and leave a banana-trunk decoy instead of a body.
+    public void TryActivate()
+    {
+        if (!IsOwner || !IsMyAbility()) return;
+
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, targetRange);
+        foreach (var hit in hits)
+        {
+            if (hit.gameObject == gameObject) continue;
+
+            PlayerRole targetRole = hit.GetComponent<PlayerRole>();
+            // Maligno never consume a fellow Maligno's body.
+            if (targetRole != null && targetRole.IsImpostor) continue;
+
+            NetworkObject targetNetObj = hit.GetComponent<NetworkObject>();
+            if (targetRole == null || targetNetObj == null || !targetRole.IsAlive) continue;
+
+            ConsumeBodyServerRpc(targetNetObj.NetworkObjectId);
+            break;
+        }
     }
 
     // Renamed from ServerConsumeBodyRpc — Netcode's code generator requires
@@ -45,6 +85,10 @@ public class BalBalAbility : NetworkBehaviour
         targetRole.ServerMarkBalBalConsumed();
         myController?.ServerStartKillCooldown();
 
+        // Same Among-Us-style snap as a normal kill — Bal-bal ends up
+        // standing where the victim was too.
+        myController?.ServerTeleportTo(deathPosition);
+
         SpawnBananaTrunkClientRpc(deathPosition);
     }
 
@@ -53,7 +97,19 @@ public class BalBalAbility : NetworkBehaviour
     {
         if (bananaTrunkPropPrefab != null)
         {
-            Instantiate(bananaTrunkPropPrefab, position, Quaternion.identity);
+            GameObject trunk = Instantiate(bananaTrunkPropPrefab, position, Quaternion.identity);
+            spawnedTrunks.Add(trunk);
         }
+    }
+
+    // Called on every client from GameStartManager.NotifyReturnedToLobbyClientRpc()
+    // so decoys from the match that just ended don't carry over into the next one.
+    public static void ClearAllTrunks()
+    {
+        foreach (var trunk in spawnedTrunks)
+        {
+            if (trunk != null) Destroy(trunk);
+        }
+        spawnedTrunks.Clear();
     }
 }

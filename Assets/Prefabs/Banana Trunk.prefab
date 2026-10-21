@@ -193,6 +193,7 @@ GameObject:
   - component: {fileID: 3630964878429122039}
   - component: {fileID: 6492772969873512529}
   - component: {fileID: 6260489285474137665}
+  - component: {fileID: 300834031134672883}
   m_Layer: 0
   m_Name: Banana Trunk
   m_TagString: Untagged
@@ -316,3 +317,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldLabel
   labelText: {fileID: 7643542467060968207}
+  visibilityBuffer: 0.2
+--- !u!114 &300834031134672883
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5881891909408155666}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcee5c42910e8904189e991c7b016f7b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::YSortedSprite
+  precision: 100
+  updateEveryFrame: 0

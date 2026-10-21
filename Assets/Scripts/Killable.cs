@@ -21,7 +21,11 @@ public class Killable : NetworkBehaviour
         if (!IsServer) return false;
         if (targetRole == null || !targetRole.IsAlive) return false;
 
-        targetRole.Kill();
+        // Only the normal kill-button path leaves a reportable body behind —
+        // meeting ejections and Bal-Bal consumption call PlayerRole.Kill()
+        // directly elsewhere and intentionally leave spawnBody at its
+        // default (false).
+        targetRole.Kill(spawnBody: true);
         return true;
     }
 }

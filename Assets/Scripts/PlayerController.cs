@@ -237,6 +237,13 @@ public class PlayerController : NetworkBehaviour
 
     public void OnReportButtonPressed() => TryReport();
 
+    // Dedicated KILL button — unlike OnUseButtonPressed() (which falls back
+    // to interacting with a task if no kill target is in range), this always
+    // attempts a kill and does nothing otherwise. TryKill() already handles
+    // every safety check (IsImpostor, IsAlive, cooldown, range), so this is
+    // safe to wire up even though a Survivor pressing it will just no-op.
+    public void OnKillButtonPressed() => TryKill();
+
     private bool HasValidKillTargetInRange()
     {
         Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, killRange);
@@ -288,17 +295,11 @@ public class PlayerController : NetworkBehaviour
             NetworkObject targetNetObj = hit.GetComponent<NetworkObject>();
             if (targetNetObj == null) continue;
 
-            // Branch: Bal-bal consumes the body (no reportable corpse).
-            // Every other Maligno type uses the normal kill flow.
-            var balBal = GetComponent<BalBalAbility>();
-            if (balBal != null && balBal.IsMyAbility())
-            {
-                balBal.ConsumeBodyServerRpc(targetNetObj.NetworkObjectId);
-            }
-            else
-            {
-                RequestKillServerRpc(targetNetObj.NetworkObjectId);
-            }
+            // KILL is now a normal kill for every Maligno type, Bal-bal
+            // included — Bal-bal's "eat the body" (banana-trunk decoy, no
+            // reportable corpse) only happens via the ABILITY button now
+            // (see BalBalAbility.TryActivate()).
+            RequestKillServerRpc(targetNetObj.NetworkObjectId);
 
             break;
         }
@@ -311,18 +312,38 @@ public class PlayerController : NetworkBehaviour
         var myRole = GetComponent<PlayerRole>();
         if (myRole == null || !myRole.IsAlive) return;
 
+        // Stationary dead-body markers have no collider (purely a visual +
+        // networked state), so they're found by distance against every
+        // spawned DeadBody, not via Physics2D overlap.
+        foreach (var spawned in NetworkManager.Singleton.SpawnManager.SpawnedObjects.Values)
+        {
+            if (spawned == null) continue;
+
+            DeadBody deadBody = spawned.GetComponent<DeadBody>();
+            if (deadBody == null) continue;
+
+            if (Vector2.Distance(transform.position, spawned.transform.position) <= reportRange)
+            {
+                MeetingManager.Instance.RequestReportBodyServerRpc(spawned.NetworkObjectId);
+                return;
+            }
+        }
+
+        // Fallback: a dead player's own collider directly. Shouldn't
+        // normally trigger (Bal-Bal victims and ejections never spawn a
+        // DeadBody anyway and already leave no trace), kept as a safety
+        // net — same client-side UX nicety pattern as before;
+        // MeetingManager's server-side check is the real authority either way.
         Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, reportRange);
         foreach (var hit in hits)
         {
             if (hit.gameObject == gameObject) continue;
 
-            PlayerRole targetRole = hit.GetComponent<PlayerRole>();
             NetworkObject targetNetObj = hit.GetComponent<NetworkObject>();
+            if (targetNetObj == null) continue;
 
-            // Bal-bal's consumed victims leave no trace — same client-side UX
-            // nicety pattern as the ghost checks elsewhere; MeetingManager's
-            // server-side check is the real authority either way.
-            if (targetRole != null && !targetRole.IsAlive && !targetRole.IsBalBalConsumed && targetNetObj != null)
+            PlayerRole targetRole = hit.GetComponent<PlayerRole>();
+            if (targetRole != null && !targetRole.IsAlive && !targetRole.IsBalBalConsumed)
             {
                 MeetingManager.Instance.RequestReportBodyServerRpc(targetNetObj.NetworkObjectId);
                 break;
@@ -364,6 +385,11 @@ public class PlayerController : NetworkBehaviour
         GetComponent<ReikiAbility>()?.TryActivate();
         GetComponent<AlbularyoAbility>()?.TryActivate();
         GetComponent<TarotUserAbility>()?.TryActivate();
+
+        // Bal-bal's "eat the body" now lives here instead of the KILL
+        // button — the KILL button is a normal kill for every Maligno,
+        // Bal-bal included.
+        GetComponent<BalBalAbility>()?.TryActivate();
     }
 
     [ServerRpc]
@@ -378,12 +404,53 @@ public class PlayerController : NetworkBehaviour
             PlayerRole targetRole = targetObj.GetComponent<PlayerRole>();
             if (targetRole != null && targetRole.IsImpostor) return;
 
+            // Captured before TryKill() in case anything about the victim's
+            // transform ever changes as a side effect of dying — right now
+            // it doesn't (only isAlive flips, DeadBody spawns separately),
+            // but reading it first costs nothing and stays correct either way.
+            Vector3 victimPosition = targetObj.transform.position;
+
             Killable target = targetObj.GetComponent<Killable>();
             if (target != null && target.TryKill())
             {
                 ServerStartKillCooldown();
+                ServerTeleportTo(victimPosition);
             }
         }
+    }
+
+    // Among Us-style kill: the killer ends up standing exactly where the
+    // victim was. Same two-part pattern as the movement-correction code
+    // below (CorrectPositionClientRpc) — the server sets the authoritative
+    // position directly, which syncs out to every other client on its own,
+    // but the owner's own client needs the explicit targeted RPC to apply
+    // it locally too.
+    public void ServerTeleportTo(Vector3 position)
+    {
+        transform.position = position;
+        if (rb != null) rb.linearVelocity = Vector2.zero;
+
+        // Without this, the next movement-validation tick would see a huge
+        // jump from the pre-kill position to here and flag it as a speed
+        // violation, snapping the killer straight back — silently undoing
+        // the teleport a frame later.
+        serverLastValidatedPosition = position;
+
+        ClientRpcParams targetOnlyOwner = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
+        };
+        TeleportClientRpc(position, targetOnlyOwner);
+    }
+
+    [ClientRpc]
+    private void TeleportClientRpc(Vector3 position, ClientRpcParams rpcParams = default)
+    {
+        if (!IsOwner) return;
+
+        transform.position = position;
+        if (rb != null) rb.linearVelocity = Vector2.zero;
+        moveInput = Vector2.zero;
     }
 
     // ---- Kill cooldown — shared by the normal kill path above AND
@@ -392,6 +459,45 @@ public class PlayerController : NetworkBehaviour
     public bool ServerIsKillOnCooldown()
     {
         return Time.time < serverKillCooldownEndTime;
+    }
+
+    // Time.time keeps counting up for the whole play session, not just one
+    // match — without this, a kill cooldown started near the end of a match
+    // would still be "in the future" at the start of the next one, silently
+    // blocking the first kill/ability of a fresh game. Resetting the server
+    // field alone isn't enough: localKillCooldownEndTime (the client-side
+    // pre-check in TryKill()) only ever lives on each owning client, so it
+    // needs its own targeted RPC the same way starting a cooldown does.
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+        serverKillCooldownEndTime = -999f;
+
+        ClientRpcParams targetOnlyOwner = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
+        };
+        NotifyKillCooldownResetClientRpc(targetOnlyOwner);
+    }
+
+    [ClientRpc]
+    private void NotifyKillCooldownResetClientRpc(ClientRpcParams rpcParams = default)
+    {
+        if (!IsOwner) return;
+        localKillCooldownEndTime = -999f;
+    }
+
+    // Called by MeetingManager once a meeting resolves, so a kill cooldown
+    // that was already ticking down when the meeting started doesn't lose
+    // that time. Only pushes it forward if it's actually still active right
+    // now — a player with no cooldown running is left untouched.
+    public void ServerExtendKillCooldownIfActive(float seconds)
+    {
+        if (!IsServer) return;
+        if (Time.time < serverKillCooldownEndTime)
+        {
+            serverKillCooldownEndTime += seconds;
+        }
     }
 
     public void ServerStartKillCooldown()
@@ -412,6 +518,17 @@ public class PlayerController : NetworkBehaviour
         localKillCooldownEndTime = Time.time + duration;
         Debug.Log($"[Client] Kill used — {duration}s cooldown.");
         AbilityCooldownUI.Instance?.StartKillCooldown(duration);
+
+        // Bal-bal's ABILITY button IS the kill (eat the body) — it shares
+        // this exact clock, so dim it too. Every other Maligno type's
+        // ability is unrelated to killing and runs its own separate
+        // cooldown (started from that ability's own TryActivate/ServerRpc),
+        // so this must stay scoped to Bal-bal only.
+        var myRole = GetComponent<PlayerRole>();
+        if (myRole != null && myRole.CurrentMalignoType == MalignoType.BalBal)
+        {
+            AbilityCooldownUI.Instance?.StartAbilityCooldown(duration);
+        }
     }
 
     // ---- Server-side movement validation (the PRD's hybrid anti-cheat model) ----

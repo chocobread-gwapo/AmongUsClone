@@ -75,6 +75,12 @@ public class GameResultManager : NetworkBehaviour
     {
         gameEnded.Value = true;
         Debug.Log($"[Server] GAME OVER: {message}");
+
+        // Clear the board immediately — a body left over from the kill that
+        // just ended the match (no meeting ever ran to clean it up) would
+        // otherwise sit there visually straight through the Game Over screen.
+        DeadBody.DespawnAll();
+
         AnnounceGameOverClientRpc(message);
     }
 

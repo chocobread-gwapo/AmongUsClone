@@ -27,6 +27,28 @@ public class TikbalangAbility : NetworkBehaviour
         return myRole != null && myRole.CurrentMalignoType == MalignoType.Tikbalang;
     }
 
+    // Time.time keeps counting up for the whole play session, not just one
+    // match — without this, a cooldown started near the end of a match
+    // would still be "in the future" at the start of the next one, silently
+    // blocking this ability on a fresh game. Called from GameStartManager's
+    // HostReturnToLobby().
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+        serverCooldownEndTime = -999f;
+    }
+
+    // See PlayerController.ServerExtendKillCooldownIfActive() — same idea,
+    // called by MeetingManager once a meeting resolves.
+    public void ServerExtendCooldownIfActive(float seconds)
+    {
+        if (!IsServer) return;
+        if (Time.time < serverCooldownEndTime)
+        {
+            serverCooldownEndTime += seconds;
+        }
+    }
+
     // Called locally by the owner (from PlayerController's shared Ability input).
     public void TryActivate()
     {

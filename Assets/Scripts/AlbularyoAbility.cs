@@ -36,6 +36,22 @@ public class AlbularyoAbility : NetworkBehaviour
         return myRole != null && myRole.CurrentSurvivorClass == SurvivorClass.Albularyo;
     }
 
+    // See TikbalangAbility.ServerResetForNewGame() for why this is needed.
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+        serverCooldownEndTime = -999f;
+    }
+
+    public void ServerExtendCooldownIfActive(float seconds)
+    {
+        if (!IsServer) return;
+        if (Time.time < serverCooldownEndTime)
+        {
+            serverCooldownEndTime += seconds;
+        }
+    }
+
     public void TryActivate()
     {
         if (!IsOwner || !IsMyAbility()) return;

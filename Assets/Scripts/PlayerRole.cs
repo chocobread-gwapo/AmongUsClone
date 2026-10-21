@@ -43,6 +43,10 @@ public class PlayerRole : NetworkBehaviour
 
     public bool IsBalBalConsumed => isBalBalConsumed.Value;
 
+    [Header("Dead Body")]
+    [Tooltip("Prefab with a NetworkObject + a trigger Collider2D + the dead-body sprite + a DeadBody component. Spawned at this player's exact position on a normal kill so living players can see and report it (ghosts keep moving after death, so the body can't just be this player's own object). Leave empty to skip spawning a body (that's already the case for Bal-Bal victims and meeting ejections, which never call Kill() with spawnBody: true). Just needs to exist anywhere in the project as a prefab — the NetworkManager's prefab list auto-picks it up since Is Default is checked.")]
+    [SerializeField] private GameObject deadBodyPrefab;
+
     public void ServerMarkBalBalConsumed()
     {
         if (!IsServer) return;
@@ -92,6 +96,14 @@ public class PlayerRole : NetworkBehaviour
         localCachedRole = role;
         localCachedMalignoType = malignoType;
         Debug.Log($"[Client] You are: {role}" + (role == Role.Impostor ? $" ({malignoType})" : ""));
+
+        // Owner-only RPC, so this only ever runs on the client this exact
+        // player object belongs to — safe to directly show/hide this
+        // client's own KILL button based on the role they were just told.
+        // Also runs on ServerResetForNewGame() (which calls this with
+        // Role.Crewmate), so the button correctly hides again on return to
+        // lobby without any extra code there.
+        KillButton.Instance?.SetVisible(role == Role.Impostor);
     }
 
     // Survivor Classes are Crewmate-only and just as private as MalignoType —
@@ -121,7 +133,11 @@ public class PlayerRole : NetworkBehaviour
         }
     }
 
-    public void Kill()
+    // spawnBody defaults to false so every EXISTING call site (meeting
+    // ejection, Babaylan's judgment, BalBalAbility's own Kill() call) keeps
+    // behaving exactly as before — no trace left behind. Only Killable.Try
+    // Kill() (the normal kill-button path) passes true.
+    public void Kill(bool spawnBody = false)
     {
         if (!IsServer) return;
         if (!isAlive.Value) return;
@@ -129,9 +145,34 @@ public class PlayerRole : NetworkBehaviour
         isAlive.Value = false;
         Debug.Log($"{gameObject.name} was eliminated.");
 
+        if (spawnBody && deadBodyPrefab != null)
+        {
+            ServerSpawnDeadBody();
+        }
+
         // NEW — a death (from a direct kill OR a meeting ejection, since both
         // call this same method) can end the match, so check right after.
         GameResultManager.Instance?.CheckWinConditions();
+    }
+
+    private void ServerSpawnDeadBody()
+    {
+        GameObject bodyInstance = Instantiate(deadBodyPrefab, transform.position, Quaternion.identity);
+        NetworkObject bodyNetObj = bodyInstance.GetComponent<NetworkObject>();
+        if (bodyNetObj == null)
+        {
+            Debug.LogWarning("[PlayerRole] deadBodyPrefab has no NetworkObject component — destroying the unspawned instance.");
+            Destroy(bodyInstance);
+            return;
+        }
+
+        bodyNetObj.Spawn();
+
+        DeadBody deadBody = bodyInstance.GetComponent<DeadBody>();
+        if (deadBody != null)
+        {
+            deadBody.ServerInitialize(NetworkObjectId);
+        }
     }
 
     // Called by GameStartManager.HostReturnToLobby() for every player, server-side

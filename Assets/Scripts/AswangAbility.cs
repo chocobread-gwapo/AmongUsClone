@@ -61,6 +61,28 @@ public class AswangAbility : NetworkBehaviour
         return myRole != null && myRole.CurrentMalignoType == MalignoType.Aswang;
     }
 
+    // See TikbalangAbility.ServerResetForNewGame() for why this is needed.
+    // Also force-ends an active disguise — a shapeshift mid-round that never
+    // reverted (e.g. the match ended before RevertAfter's coroutine finished)
+    // would otherwise still show as an active disguise at the start of the
+    // next match.
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+        serverCooldownEndTime = -999f;
+        disguiseActive.Value = false;
+        disguiseLabel.Value = "";
+    }
+
+    public void ServerExtendCooldownIfActive(float seconds)
+    {
+        if (!IsServer) return;
+        if (Time.time < serverCooldownEndTime)
+        {
+            serverCooldownEndTime += seconds;
+        }
+    }
+
     public void TryActivate()
     {
         if (!IsOwner || !IsMyAbility()) return;

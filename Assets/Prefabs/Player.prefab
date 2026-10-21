@@ -531,6 +531,7 @@ GameObject:
   - component: {fileID: 8353363175047079632}
   - component: {fileID: 7566472482078722507}
   - component: {fileID: 5512922188452733733}
+  - component: {fileID: -980340813718679854}
   m_Layer: 3
   m_Name: Player
   m_TagString: Untagged
@@ -1122,7 +1123,37 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YSortedSprite
   precision: 100
+  baseOrder: 10000
   updateEveryFrame: 1
+--- !u!114 &-980340813718679854
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5095291193812127684}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ec918d8240bf884380c64dfd82fe6c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterSpriteAnimator
+  downFrames:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  upFrames:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  leftFrames:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  rightFrames:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  frameDuration: 0.15
 --- !u!1001 &4492951778481534029
 PrefabInstance:
   m_ObjectHideFlags: 0

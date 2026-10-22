@@ -88,4 +88,4 @@ Host a room, share the code, play a full match (tasks, meetings, kills, abilitie
 7. Host clicks **Start** once enough players have joined (4+ recommended) — roles and tasks are assigned automatically
 
 ## Team
-Built by Jem and collaborators as a learning project exploring Unity, server-authoritative multiplayer architecture, and Philippine-folklore-inspired game design.
+Built by Epiphrame as a learning project exploring Unity, server-authoritative multiplayer architecture, and Philippine-folklore-inspired game design.

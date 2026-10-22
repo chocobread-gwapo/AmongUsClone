@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -54,41 +55,67 @@ public class GameResultManager : NetworkBehaviour
         // both favor Crewmates; only check Maligno parity after ruling those out.
         if (tasksComplete)
         {
-            EndGame("TAGUMPAY ANG BARYO — the villagers finished every chore. Crewmates win!");
+            EndGame(true, "TAGUMPAY ANG BARYO", "The villagers finished every chore before the Maligno could stop them.");
             return;
         }
 
         if (aliveImpostors <= 0)
         {
-            EndGame("TAGUMPAY ANG BARYO — every Maligno has been cast out. Crewmates win!");
+            EndGame(true, "TAGUMPAY ANG BARYO", "Every Maligno has been cast out of the village.");
             return;
         }
 
         if (aliveImpostors >= aliveCrewmates)
         {
-            EndGame("NAGHARI ANG DILIM — the Maligno now equal or outnumber the living. They win.");
+            EndGame(false, "NAGHARI ANG DILIM", "The Maligno now equal or outnumber the living villagers.");
             return;
         }
     }
 
-    private void EndGame(string message)
+    private void EndGame(bool crewWon, string headline, string reason)
     {
         gameEnded.Value = true;
-        Debug.Log($"[Server] GAME OVER: {message}");
+        Debug.Log($"[Server] GAME OVER: {headline} — {reason}");
 
         // Clear the board immediately — a body left over from the kill that
         // just ended the match (no meeting ever ran to clean it up) would
         // otherwise sit there visually straight through the Game Over screen.
         DeadBody.DespawnAll();
 
-        AnnounceGameOverClientRpc(message);
+        // Roles are private during a match (each client only knows its own),
+        // so the full reveal has to come from the server, at the very end.
+        var ids = new List<ulong>();
+        var roles = new List<int>();
+        var types = new List<int>();
+        var classes = new List<int>();
+        var alive = new List<bool>();
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            if (client.PlayerObject == null) continue;
+            PlayerRole r = client.PlayerObject.GetComponent<PlayerRole>();
+            if (r == null) continue;
+            ids.Add(client.ClientId);
+            roles.Add(r.IsImpostor ? 1 : 0);
+            types.Add((int)r.CurrentMalignoType);
+            classes.Add((int)r.CurrentSurvivorClass);
+            alive.Add(r.IsAlive);
+        }
+
+        int done = TaskManager.Instance != null ? TaskManager.Instance.CompletedTasks : 0;
+        int total = TaskManager.Instance != null ? TaskManager.Instance.TotalTasks : 0;
+
+        AnnounceGameOverClientRpc(crewWon, headline, reason,
+            ids.ToArray(), roles.ToArray(), types.ToArray(), classes.ToArray(), alive.ToArray(),
+            done, total);
     }
 
     [ClientRpc]
-    private void AnnounceGameOverClientRpc(string message, ClientRpcParams rpcParams = default)
+    private void AnnounceGameOverClientRpc(bool crewWon, string headline, string reason,
+        ulong[] ids, int[] roles, int[] types, int[] classes, bool[] alive,
+        int tasksDone, int tasksTotal, ClientRpcParams rpcParams = default)
     {
-        Debug.Log($"[Client] GAME OVER: {message}");
-        GameOverUI.Instance?.Show(message);
+        Debug.Log($"[Client] GAME OVER: {headline} — {reason}");
+        GameOverUI.Instance?.ShowResult(crewWon, headline, reason, ids, roles, types, classes, alive, tasksDone, tasksTotal);
     }
 
     // Called by GameStartManager.HostReturnToLobby() — clears the ended flag

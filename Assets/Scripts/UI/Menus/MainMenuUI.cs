@@ -46,9 +46,9 @@ public class MainMenuUI : MonoBehaviour
 
     private void OnSettingsClicked()
     {
-        if (settingsPanel == null) return; // no options panel wired up yet — no-op
+        // The code-built SettingsMenu (volume sliders + keybinds) replaces the old panel.
         if (mainButtonsPanel != null) mainButtonsPanel.SetActive(false);
-        settingsPanel.SetActive(true);
+        SettingsMenu.Open(() => { if (mainButtonsPanel != null) mainButtonsPanel.SetActive(true); });
     }
 
     // Wire this to a "Back"/"X" button on playPanel and settingsPanel so the

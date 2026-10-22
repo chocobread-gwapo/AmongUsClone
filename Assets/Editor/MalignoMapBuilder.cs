@@ -36,6 +36,13 @@ public static class MalignoMapBuilder
         imp.SaveAndReimport();
     }
 
+    static Vector2[] ToPts(float[] f)
+    {
+        var p = new Vector2[f.Length / 2];
+        for (int i = 0; i < p.Length; i++) p[i] = new Vector2(f[i * 2], f[i * 2 + 1]);
+        return p;
+    }
+
     public static bool Fill(Transform root, int wallLayer)
     {
         PrepareImage();
@@ -60,18 +67,22 @@ public static class MalignoMapBuilder
         rb.bodyType = RigidbodyType2D.Static;
         var comp = walls.AddComponent<CompositeCollider2D>();
         comp.geometryType = CompositeCollider2D.GeometryType.Polygons;
-        var d = MalignoMapWalls.Walls;
-        for (int i = 0; i + 3 < d.Length; i += 4)
+        // Smooth outlines (with holes) traced from the hull mask: diagonals are real diagonals now,
+        // not stair-steps of little boxes.
+        foreach (var o in MalignoMapWalls.Outlines)
         {
-            var box = walls.AddComponent<BoxCollider2D>();
-            box.offset = new Vector2(d[i], d[i + 1]);
-            box.size = new Vector2(d[i + 2], d[i + 3]);
-            box.compositeOperation = Collider2D.CompositeOperation.Merge;
+            var poly = walls.AddComponent<PolygonCollider2D>();
+            poly.pathCount = 1 + o.holes.Length;
+            poly.SetPath(0, ToPts(o.outer));
+            for (int h = 0; h < o.holes.Length; h++) poly.SetPath(h + 1, ToPts(o.holes[h]));
+            poly.compositeOperation = Collider2D.CompositeOperation.Merge;
         }
 
         // Furniture colliders: polygons traced from the actual furniture shapes.
+        // Parented under the wall object so every furniture polygon merges into the SAME composite
+        // collider as the walls: no internal seams for the player's capsule to catch on.
         var fur = new GameObject("FurnitureColliders") { layer = wallLayer };
-        fur.transform.SetParent(root, false);
+        fur.transform.SetParent(walls.transform, false);
         fur.isStatic = true;
         foreach (var f in MalignoMapFurniture.Polys)
         {
@@ -83,6 +94,7 @@ public static class MalignoMapBuilder
             var poly = go.AddComponent<PolygonCollider2D>();
             poly.pathCount = 1;
             poly.SetPath(0, pts);
+            poly.compositeOperation = Collider2D.CompositeOperation.Merge;
         }
 
         // Furniture cutouts: the same pixels as the map, drawn above the player when he stands behind the piece.

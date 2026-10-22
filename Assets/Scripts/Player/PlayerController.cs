@@ -711,6 +711,8 @@ public class PlayerController : NetworkBehaviour
     // jitter. It also raycasts the straight-line path against wallLayerMask
     // to catch wall-clipping. Either violation snaps the offending client
     // back to its last validated position via a targeted ClientRpc.
+    private Collider2D feetCollider;
+
     private void ServerValidateMovement()
     {
         serverValidationTimer += Time.deltaTime;
@@ -731,7 +733,16 @@ public class PlayerController : NetworkBehaviour
         if (!speedViolation && distanceMoved > 0.001f)
         {
             Vector2 direction = (currentPosition - serverLastValidatedPosition).normalized;
-            RaycastHit2D hit = Physics2D.Raycast(serverLastValidatedPosition, direction, distanceMoved, wallLayerMask);
+
+            // Cast from where the player's FEET are, not the sprite pivot: the pivot sits
+            // ~0.55 units above the feet collider, so a ray from it ran through tables and
+            // walls the player was legitimately sliding along and caused false "wall-clip"
+            // snap-backs (the jitter near furniture).
+            Vector2 feetOffset = Vector2.zero;
+            if (feetCollider == null) feetCollider = GetComponent<Collider2D>();
+            if (feetCollider != null) feetOffset = (Vector2)feetCollider.bounds.center - (Vector2)transform.position;
+
+            RaycastHit2D hit = Physics2D.Raycast((Vector2)serverLastValidatedPosition + feetOffset, direction, distanceMoved, wallLayerMask);
             wallViolation = hit.collider != null;
         }
 

@@ -30,6 +30,11 @@ public class PlayerLabel : NetworkBehaviour
         return $"Player {ownerClientId + 1} ({colorName})";
     }
 
+    public static Color ColorFor(ulong ownerClientId)
+    {
+        return Palette[ownerClientId % (ulong)Palette.Length].Color;
+    }
+
     // Two-line rich-text nametag; shared so ability disguises can restore/copy it.
     public static string RichLabel(ulong ownerClientId)
     {

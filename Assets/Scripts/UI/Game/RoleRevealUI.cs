@@ -49,6 +49,8 @@ public class RoleRevealUI : MonoBehaviour
 
     private Coroutine hideRoutine;
 
+    public bool IsShowing => root != null && root.activeSelf;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)

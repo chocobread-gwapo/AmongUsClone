@@ -75,7 +75,7 @@ public class GameResultManager : NetworkBehaviour
     private void EndGame(bool crewWon, string headline, string reason)
     {
         gameEnded.Value = true;
-        Debug.Log($"[Server] GAME OVER: {headline} — {reason}");
+        Debug.Log($"[Server] GAME OVER: {headline}: {reason}");
 
         // Clear the board immediately — a body left over from the kill that
         // just ended the match (no meeting ever ran to clean it up) would
@@ -114,7 +114,7 @@ public class GameResultManager : NetworkBehaviour
         ulong[] ids, int[] roles, int[] types, int[] classes, bool[] alive,
         int tasksDone, int tasksTotal, ClientRpcParams rpcParams = default)
     {
-        Debug.Log($"[Client] GAME OVER: {headline} — {reason}");
+        Debug.Log($"[Client] GAME OVER: {headline}: {reason}");
         GameOverUI.Instance?.ShowResult(crewWon, headline, reason, ids, roles, types, classes, alive, tasksDone, tasksTotal);
     }
 

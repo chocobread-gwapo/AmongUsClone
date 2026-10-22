@@ -15,10 +15,10 @@ public class GameHudUI : MonoBehaviour
 {
     public static GameHudUI Instance { get; private set; }
 
-    [Tooltip("Every HUD element that should only be visible DURING a match — not in the lobby, not after returning to it.")]
+    [Tooltip("Every HUD element that should only be visible DURING a match: not in the lobby, not after returning to it.")]
     [SerializeField] private GameObject[] hudElements;
 
-    [Tooltip("Buttons a dead player can't use — Call Meeting, Report, Ability. Hidden whenever the LOCAL player is dead, shown again on revival (ServerResetForNewGame). Don't include USE here; ghosts can still do tasks.")]
+    [Tooltip("Buttons a dead player can't use: Call Meeting, Report, Ability. Hidden whenever the LOCAL player is dead, shown again on revival (ServerResetForNewGame). Don't include USE here; ghosts can still do tasks.")]
     [SerializeField] private GameObject[] deadRestrictedButtons;
 
     private bool? lastKnownAliveState; // null = not yet evaluated

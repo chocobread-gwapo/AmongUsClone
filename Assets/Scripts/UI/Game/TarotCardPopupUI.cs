@@ -21,9 +21,9 @@ public class TarotCardPopupUI : MonoBehaviour
     public static TarotCardPopupUI Instance { get; private set; }
 
     [Header("References")]
-    [Tooltip("Root panel object — gets faded in/out via the CanvasGroup below.")]
+    [Tooltip("Root panel object: gets faded in/out via the CanvasGroup below.")]
     [SerializeField] private CanvasGroup popupGroup;
-    [Tooltip("The single card Image — shows the back sprite, then flips to the drawn card's front sprite.")]
+    [Tooltip("The single card Image: shows the back sprite, then flips to the drawn card's front sprite.")]
     [SerializeField] private Image cardImage;
     [SerializeField] private TextMeshProUGUI cardNameText;
     [SerializeField] private TextMeshProUGUI orientationText;
@@ -51,7 +51,7 @@ public class TarotCardPopupUI : MonoBehaviour
     [Header("Flip Animation")]
     [Tooltip("Total time for the back-to-front flip (shrink + swap + grow).")]
     [SerializeField] private float flipDuration = 0.5f;
-    [Tooltip("Small z-axis tilt (degrees) the card wobbles through during the flip, for a bit of life — 0 disables it.")]
+    [Tooltip("Small z-axis tilt (degrees) the card wobbles through during the flip, for a bit of life: 0 disables it.")]
     [SerializeField] private float flipTiltDegrees = 6f;
 
     [Header("Timing")]
@@ -108,7 +108,7 @@ public class TarotCardPopupUI : MonoBehaviour
             if (entry.cardName == cardName) return entry.sprite;
         }
 
-        Debug.LogWarning($"[TarotCardPopupUI] No front-face art mapped for card \"{cardName}\" — check the Card Art list in the Inspector.");
+        Debug.LogWarning($"[TarotCardPopupUI] No front-face art mapped for card \"{cardName}\": check the Card Art list in the Inspector.");
         return null;
     }
 

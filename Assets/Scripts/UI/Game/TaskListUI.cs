@@ -29,8 +29,23 @@ public class TaskListUI : MonoBehaviour
     }
 
     // Tab collapses/expands the task list so it doesn't cover the map.
+    private bool hiddenForMaligno;
+
     private void Update()
     {
+        var local = Unity.Netcode.NetworkManager.Singleton != null ? Unity.Netcode.NetworkManager.Singleton.LocalClient?.PlayerObject : null;
+        var role = local != null ? local.GetComponent<PlayerRole>() : null;
+        if (role != null && listContainer != null)
+        {
+            if (role.IsImpostor)
+            {
+                if (listContainer.gameObject.activeSelf) listContainer.gameObject.SetActive(false);
+                hiddenForMaligno = true;
+                return; // no Tab toggle for Maligno
+            }
+            if (hiddenForMaligno) { listContainer.gameObject.SetActive(true); hiddenForMaligno = false; }
+        }
+
         if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame && listContainer != null)
             listContainer.gameObject.SetActive(!listContainer.gameObject.activeSelf);
     }

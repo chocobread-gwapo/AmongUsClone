@@ -66,7 +66,7 @@ public class TaskZone : NetworkBehaviour
     private void OnTriggerEnter2D(Collider2D other)
     {
         PlayerController player = other.GetComponent<PlayerController>();
-        if (player != null && player.IsOwner && !IsComplete)
+        if (player != null && player.IsOwner && !IsComplete && !IsMaligno(player))
         {
             player.CurrentTaskZone = this;
             if (promptIndicator != null)
@@ -92,18 +92,30 @@ public class TaskZone : NetworkBehaviour
     }
 
     // Called locally by the owning player; requests completion from the server
+    private static bool IsMaligno(Component c)
+    {
+        var role = c != null ? c.GetComponent<PlayerRole>() : null;
+        return role != null && role.IsImpostor;
+    }
+
     public void TryComplete()
     {
         if (IsComplete || TaskMiniGame.IsOpen) return;
+        var local = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClient?.PlayerObject : null;
+        if (local != null && IsMaligno(local)) return; // Maligno do not do chores
         // Player finishes a short mini-game first; only then does the server
         // get asked to mark the task done.
         TaskMiniGame.Open(roomName, taskName, () => { if (this != null && !IsComplete) RequestCompleteServerRpc(); });
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void RequestCompleteServerRpc()
+    private void RequestCompleteServerRpc(ServerRpcParams rpcParams = default)
     {
         if (isComplete.Value) return;
+
+        // Maligno never do tasks; the server is the real authority.
+        if (NetworkManager.Singleton.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var sender)
+            && sender.PlayerObject != null && IsMaligno(sender.PlayerObject)) return;
 
         isComplete.Value = true;
         Debug.Log($"[Server] Task completed: {taskName}");

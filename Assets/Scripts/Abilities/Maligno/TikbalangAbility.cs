@@ -24,7 +24,7 @@ public class TikbalangAbility : NetworkBehaviour
 
     public bool IsMyAbility()
     {
-        return myRole != null && myRole.CurrentMalignoType == MalignoType.Tikbalang;
+        return myRole != null && myRole.IsAlive && myRole.CurrentMalignoType == MalignoType.Tikbalang; // dead players cannot use abilities
     }
 
     // Time.time keeps counting up for the whole play session, not just one
@@ -87,22 +87,17 @@ public class TikbalangAbility : NetworkBehaviour
         // Server-authoritative check — never bewilder a fellow Maligno.
         if (targetRole.IsImpostor) return;
 
-        // Server-side range check (slack for latency).
-        if (Vector2.Distance(transform.position, targetObj.transform.position) > targetRange * 1.5f) return;
-
         serverCooldownEndTime = Time.time + cooldownDuration;
         NotifyCooldownStartedClientRpc(cooldownDuration);
 
-        // Run on the target so the effect still ends if the caster despawns.
-        targetController.StartCoroutine(InvertControlsFor(targetController, inversionDuration));
+        StartCoroutine(InvertControlsFor(targetController, inversionDuration));
     }
 
     private IEnumerator InvertControlsFor(PlayerController targetController, float duration)
     {
-        if (targetController == null) yield break;
         targetController.ServerSetControlsInverted(true);
         yield return new WaitForSeconds(duration);
-        if (targetController != null) targetController.ServerSetControlsInverted(false);
+        targetController.ServerSetControlsInverted(false);
     }
 
     // Targeted at the Tikbalang's own owner only, so the ability-cooldown UI

@@ -163,8 +163,8 @@ public class PlayerRole : NetworkBehaviour
     // either one updates, rather than assuming which one fired most recently.
     private void UpdateAbilityButtonVisibility()
     {
-        bool show = localCachedRole == Role.Impostor
-            || (localCachedSurvivorClass != SurvivorClass.None && localCachedSurvivorClass != SurvivorClass.Babaylan);
+        bool show = isAlive.Value && (localCachedRole == Role.Impostor
+            || (localCachedSurvivorClass != SurvivorClass.None && localCachedSurvivorClass != SurvivorClass.Babaylan));
         AbilityButton.Instance?.SetVisible(show);
     }
 
@@ -255,6 +255,13 @@ public class PlayerRole : NetworkBehaviour
     private void HandleAliveChanged(bool previous, bool current)
     {
         var rb = GetComponent<Rigidbody2D>();
+
+        // The local player's own HUD: a ghost has no KILL or ABILITY button.
+        if (IsOwner)
+        {
+            KillButton.Instance?.SetVisible(current && CurrentRole == Role.Impostor);
+            UpdateAbilityButtonVisibility();
+        }
 
         if (!current)
         {

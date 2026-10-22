@@ -1,0 +1,15 @@
+==== PERF 2026-10-23 01:26:37 scene=Game ====
+frames=2185 avg=7.22ms (139 fps) p95=6.16ms max=5758.38ms
+GC alloc=0.0 KB total, 0.00 KB/frame, gen0 collections=2
+colliders: total=105 polygon=89 composite=2 (points=2409, paths=68)
+physics queries (random map points): raycast=2.0 us, overlapCircle=1.6 us
+network: not running
+
+==== PERF 2026-10-23 01:35:10 scene=Game ====
+frames=1720 avg=6.37ms (157 fps) p95=7.37ms max=945.07ms
+GC alloc=0.0 KB total, 0.00 KB/frame, gen0 collections=2
+colliders: total=107 polygon=89 composite=2 (points=2409, paths=68)
+physics queries (random map points): raycast=1.7 us, overlapCircle=1.7 us
+network: host=True server=True clients=2 spawnedObjects=20 tickRate=30
+rtt to client 1=73 ms
+

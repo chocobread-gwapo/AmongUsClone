@@ -269,6 +269,77 @@ public class MultiplayerConnectionManager : MonoBehaviour
         }
     }
 
+    // ---------- Host migration ("keep the group together") ----------
+    //
+    // When the host drops, the match state is gone (it lived on the host), but the UGS session
+    // the players joined still exists and elects a new host by itself. The new host starts a
+    // fresh Relay session and posts its join code as a property on the OLD session; everyone
+    // else watches for that property and joins the new session, landing in a fresh Lobby.
+
+    private const string NextCodeKey = "maligno.next";
+
+    public bool CanMigrate => currentSession != null && !IsLeaving;
+
+    // Returns true once this player is hosting or has joined the new session.
+    public async Task<bool> TryMigrateAsync(Action<string> status)
+    {
+        var old = currentSession;
+        if (old == null) return false;
+
+        try
+        {
+            var nm = NetworkManager.Singleton;
+            float t = 0f;
+            while (nm != null && (nm.IsListening || nm.ShutdownInProgress) && t < 5f && !IsLeaving)
+            {
+                await Task.Delay(200);
+                t += 0.2f;
+            }
+
+            status?.Invoke("The host left.\nChoosing a new host...");
+
+            float waited = 0f;
+            while (waited < 45f && !IsLeaving)
+            {
+                if (old.IsHost)
+                {
+                    status?.Invoke("You are the new host.\nSetting up a new lobby...");
+                    string code = await HostGameAsync();
+                    if (string.IsNullOrEmpty(code)) { currentSession = old; return false; }
+
+                    try
+                    {
+                        old.AsHost().SetProperty(NextCodeKey, new SessionProperty(code, VisibilityPropertyOptions.Member));
+                        await old.AsHost().SavePropertiesAsync();
+                    }
+                    catch (Exception e) { Debug.LogException(e); }
+
+                    // Give the others a few seconds to read the new code before the old session closes.
+                    await Task.Delay(8000);
+                    try { await old.LeaveAsync(); } catch (Exception e) { Debug.LogWarning("[Migrate] " + e.Message); }
+                    return true;
+                }
+
+                if (old.Properties.TryGetValue(NextCodeKey, out var prop) && !string.IsNullOrEmpty(prop.Value))
+                {
+                    status?.Invoke("Joining the new lobby...");
+                    try { await old.LeaveAsync(); } catch (Exception e) { Debug.LogWarning("[Migrate] " + e.Message); }
+                    currentSession = null;
+                    await JoinGameAsync(prop.Value);
+                    return currentSession != null;
+                }
+
+                await Task.Delay(1000);
+                waited += 1f;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+        }
+        return false;
+    }
+
     private void OnApplicationQuit()
     {
         // Shut the network down in an orderly way first (this runs before

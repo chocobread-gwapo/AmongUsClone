@@ -8,7 +8,7 @@ public class MeetingManager : NetworkBehaviour
     public static MeetingManager Instance { get; private set; }
 
     [Header("Meeting Settings")]
-    [Tooltip("Fallback used only if GameStartManager isn't found — normal play reads GameStartManager.Instance.MeetingDuration instead, so the Host Settings Panel's value actually takes effect.")]
+    [Tooltip("Fallback used only if GameStartManager isn't found: normal play reads GameStartManager.Instance.MeetingDuration instead, so the Host Settings Panel's value actually takes effect.")]
     [SerializeField] private float votingDuration = 30f;
     [SerializeField] private float reportRange = 1.5f;
 
@@ -391,7 +391,7 @@ public class MeetingManager : NetworkBehaviour
             banishedWasImpostor = judgeRole.IsImpostor; // always false — Babaylan is a Survivor Class, Crewmate-only
         }
 
-        Debug.Log($"[Server] Babaylan's judgment: {judgeRole.gameObject.name} judged {targetRole.gameObject.name} — {(guessWasCorrect ? "correct, target banished" : "WRONG, Babaylan banished instead")}.");
+        Debug.Log($"[Server] Babaylan's judgment: {judgeRole.gameObject.name} judged {targetRole.gameObject.name}: {(guessWasCorrect ? "correct, target banished" : "WRONG, Babaylan banished instead")}.");
 
         // Same as ResolveVotes() — if the Kill() above just ended the match,
         // skip the judgment announcement and let GameOverUI be the only
@@ -412,8 +412,8 @@ public class MeetingManager : NetworkBehaviour
     private void AnnounceJudgmentResultClientRpc(string judgeName, string targetName, bool guessWasCorrect, string banishedName)
     {
         string message = guessWasCorrect
-            ? $"{judgeName} invoked Judge Skill on {targetName} — correct! {banishedName} was a Maligno and has been exiled to the forest."
-            : $"{judgeName} invoked Judge Skill on {targetName} — WRONG. {banishedName} the Babaylan has been exiled to the forest instead.";
+            ? $"{judgeName} invoked Judge Skill on {targetName}: correct! {banishedName} was a Maligno and has been exiled to the forest."
+            : $"{judgeName} invoked Judge Skill on {targetName}: WRONG. {banishedName} the Babaylan has been exiled to the forest instead.";
 
         Debug.Log($"[Client] {message}");
         MeetingUI.Instance?.ShowResult(message);

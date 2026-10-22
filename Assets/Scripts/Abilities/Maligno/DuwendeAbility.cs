@@ -19,10 +19,6 @@ public class DuwendeAbility : NetworkBehaviour
     [Tooltip("Hard cap on how many traps this Duwende can EVER place in one match, regardless of how many have already been triggered/consumed.")]
     [SerializeField] private int maxTrapsPerMatch = 3;
 
-    [SerializeField] private float placeCooldown = 1f;
-    [SerializeField] private float minTrapSpacing = 1f;
-    private float nextPlaceTime;
-
     private PlayerRole myRole;
 
     // Server-only bookkeeping — never synced.
@@ -40,7 +36,7 @@ public class DuwendeAbility : NetworkBehaviour
 
     public bool IsMyAbility()
     {
-        return myRole != null && myRole.CurrentMalignoType == MalignoType.Duwende;
+        return myRole != null && myRole.IsAlive && myRole.CurrentMalignoType == MalignoType.Duwende; // dead players cannot use abilities
     }
 
     public void TryActivate()
@@ -53,12 +49,6 @@ public class DuwendeAbility : NetworkBehaviour
     private void PlaceTrapServerRpc(Vector3 position)
     {
         if (!IsMyAbility()) return;
-
-        // Server decides where the trap goes (at the feet) and rate-limits placement.
-        if (Time.time < nextPlaceTime) return;
-        position = transform.position + Vector3.down * 0.55f;
-        foreach (var t in activeTraps)
-            if (t != null && Vector2.Distance(t.transform.position, position) < minTrapSpacing) return;
 
         if (totalTrapsPlaced >= maxTrapsPerMatch)
         {
@@ -98,7 +88,6 @@ public class DuwendeAbility : NetworkBehaviour
         }
 
         totalTrapsPlaced++;
-        nextPlaceTime = Time.time + placeCooldown;
 
         Debug.Log($"[Server] Duwende placed a Nuno mound trap ({activeTraps.Count}/{maxActiveTraps} active, {totalTrapsPlaced}/{maxTrapsPerMatch} used this match).");
     }
@@ -117,6 +106,5 @@ public class DuwendeAbility : NetworkBehaviour
 
         activeTraps.Clear();
         totalTrapsPlaced = 0;
-        nextPlaceTime = 0f;
     }
 }

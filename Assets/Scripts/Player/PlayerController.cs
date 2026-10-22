@@ -350,19 +350,26 @@ public class PlayerController : NetworkBehaviour
     // diff, same OverlapCircleAll already used for the real kill check) so
     // the glow appears/disappears the instant a target steps in/out of
     // range, dies, becomes a fellow Maligno via Aswang's disguise, etc.
+    private PlayerRole cachedRole;
+    private readonly Collider2D[] killHitBuffer = new Collider2D[16];
+    private readonly List<TargetOutline> staleHighlights = new List<TargetOutline>();
+
     private void UpdateKillTargetHighlighting()
     {
-        var myRole = GetComponent<PlayerRole>();
+        if (cachedRole == null) cachedRole = GetComponent<PlayerRole>();
+        var myRole = cachedRole;
         bool canKillNow = myRole != null && myRole.IsImpostor && myRole.IsAlive
             && Time.time >= localKillCooldownEndTime && !IsBlocked();
 
         killTargetScratch.Clear();
         if (canKillNow)
         {
-            Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, killRange);
-            foreach (var hit in hits)
+            // Non-allocating overlap into a reused buffer (the old OverlapCircleAll allocated every frame).
+            int count = Physics2D.OverlapCircle(transform.position, killRange, new ContactFilter2D().NoFilter(), killHitBuffer);
+            for (int i = 0; i < count; i++)
             {
-                if (hit.gameObject == gameObject) continue;
+                var hit = killHitBuffer[i];
+                if (hit == null || hit.gameObject == gameObject) continue;
                 if (hit.GetComponent<Killable>() == null) continue;
 
                 PlayerRole hitRole = hit.GetComponent<PlayerRole>();
@@ -374,12 +381,17 @@ public class PlayerController : NetworkBehaviour
         }
 
         // Turn off anything highlighted last frame that isn't valid anymore.
-        highlightedKillTargets.RemoveWhere(outline =>
+        staleHighlights.Clear();
+        foreach (var outline in highlightedKillTargets)
         {
-            bool stillValid = outline != null && killTargetScratch.Contains(outline);
-            if (!stillValid && outline != null) outline.SetHighlighted(false);
-            return !stillValid;
-        });
+            if (outline == null || !killTargetScratch.Contains(outline)) staleHighlights.Add(outline);
+        }
+        for (int i = 0; i < staleHighlights.Count; i++)
+        {
+            var outline = staleHighlights[i];
+            highlightedKillTargets.Remove(outline);
+            if (outline != null) outline.SetHighlighted(false);
+        }
 
         // Turn on anything newly valid.
         foreach (var outline in killTargetScratch)
@@ -730,7 +742,12 @@ public class PlayerController : NetworkBehaviour
         bool speedViolation = distanceMoved > maxAllowedDistance;
 
         bool wallViolation = false;
-        if (!speedViolation && distanceMoved > 0.001f)
+        // Ghosts may pass through inner walls and furniture (only the map's outer boundary,
+        // GhostBounds, stops them), so the wall-clip raycast does not apply to them.
+        var validatedRole = GetComponent<PlayerRole>();
+        bool isGhost = validatedRole != null && !validatedRole.IsAlive;
+
+        if (!speedViolation && !isGhost && distanceMoved > 0.001f)
         {
             Vector2 direction = (currentPosition - serverLastValidatedPosition).normalized;
 

@@ -31,7 +31,6 @@ public class AswangAbility : NetworkBehaviour
 
     // Server-only.
     private float serverCooldownEndTime = -999f;
-    private Coroutine revertRoutine;
 
     private void Awake()
     {
@@ -59,7 +58,7 @@ public class AswangAbility : NetworkBehaviour
 
     public bool IsMyAbility()
     {
-        return myRole != null && myRole.CurrentMalignoType == MalignoType.Aswang;
+        return myRole != null && myRole.IsAlive && myRole.CurrentMalignoType == MalignoType.Aswang; // dead players cannot use abilities
     }
 
     // See TikbalangAbility.ServerResetForNewGame() for why this is needed.
@@ -71,7 +70,6 @@ public class AswangAbility : NetworkBehaviour
     {
         if (!IsServer) return;
         serverCooldownEndTime = -999f;
-        if (revertRoutine != null) { StopCoroutine(revertRoutine); revertRoutine = null; }
         disguiseActive.Value = false;
         disguiseLabel.Value = "";
     }
@@ -117,13 +115,9 @@ public class AswangAbility : NetworkBehaviour
 
         PlayerRole targetRole = targetObj.GetComponent<PlayerRole>();
         if (targetRole == null || !targetRole.IsAlive) return;
-        if (targetObj.gameObject == gameObject) return;
-
-        // Server-side range check (with slack for latency) so a modified client can't shapeshift from across the map.
-        if (Vector2.Distance(transform.position, targetObj.transform.position) > targetRange * 1.5f) return;
 
         SpriteRenderer targetSprite = targetObj.GetComponent<SpriteRenderer>();
-        string targetName = PlayerLabel.RichLabel(targetObj.OwnerClientId);
+        string targetName = $"Player {targetObj.OwnerClientId + 1}";
 
         serverCooldownEndTime = Time.time + cooldownDuration;
         NotifyCooldownStartedClientRpc(cooldownDuration);
@@ -132,9 +126,7 @@ public class AswangAbility : NetworkBehaviour
         disguiseColor.Value = targetSprite != null ? targetSprite.color : Color.white;
         disguiseActive.Value = true;
 
-        // Restart the timer so a second shapeshift isn't cut short by the first one's revert.
-        if (revertRoutine != null) StopCoroutine(revertRoutine);
-        revertRoutine = StartCoroutine(RevertAfter(disguiseDuration));
+        StartCoroutine(RevertAfter(disguiseDuration));
     }
 
     // Targeted at the Aswang's own owner only, same pattern as Tikbalang's —
@@ -152,7 +144,6 @@ public class AswangAbility : NetworkBehaviour
         yield return new WaitForSeconds(duration);
         disguiseActive.Value = false;
         disguiseLabel.Value = "";
-        revertRoutine = null;
     }
 
     private void HandleDisguiseChanged(bool previous, bool current) => RefreshVisual();
@@ -168,7 +159,7 @@ public class AswangAbility : NetworkBehaviour
 
         if (worldLabel != null)
         {
-            worldLabel.SetLabel(disguiseActive.Value ? disguiseLabel.Value.ToString() : PlayerLabel.RichLabel(OwnerClientId));
+            worldLabel.SetLabel(disguiseActive.Value ? disguiseLabel.Value.ToString() : $"Player {OwnerClientId + 1}");
         }
 
         // TODO: spawn a reversed-footprint particle trail while disguiseActive.Value

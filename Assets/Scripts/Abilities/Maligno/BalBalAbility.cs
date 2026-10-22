@@ -30,7 +30,7 @@ public class BalBalAbility : NetworkBehaviour
 
     public bool IsMyAbility()
     {
-        return myRole != null && myRole.CurrentMalignoType == MalignoType.BalBal;
+        return myRole != null && myRole.IsAlive && myRole.CurrentMalignoType == MalignoType.BalBal; // dead players cannot use abilities
     }
 
     // ABILITY-button entry point — same owner-side target-finding pattern as

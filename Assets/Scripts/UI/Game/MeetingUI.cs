@@ -22,13 +22,13 @@ public class MeetingUI : MonoBehaviour
     private float meetingOpenedAt;
 
     [Header("HUD to hide while a meeting is open")]
-    [Tooltip("Task panel, USE/REPORT/ABILITY buttons, Call Meeting button — anything from the normal HUD that would otherwise render on top of (or behind, but still visible/clickable alongside) the voting panel. Assign every HUD element that shouldn't be visible/usable during a meeting.")]
+    [Tooltip("Task panel, USE/REPORT/ABILITY buttons, Call Meeting button: anything from the normal HUD that would otherwise render on top of (or behind, but still visible/clickable alongside) the voting panel. Assign every HUD element that shouldn't be visible/usable during a meeting.")]
     [SerializeField] private GameObject[] hudToHideDuringMeeting;
 
-    [Header("Babaylan — Judge Skill")]
+    [Header("Babaylan: Judge Skill")]
     [Tooltip("Toggle button shown ONLY to a Babaylan who hasn't used their one judgment yet. While active, clicking a player condemns them instantly instead of casting a vote.")]
     [SerializeField] private GameObject judgeModeButton;
-    [Tooltip("Optional label on the toggle button — swapped between normal/active text so it's obvious Judge Mode is on.")]
+    [Tooltip("Optional label on the toggle button: swapped between normal/active text so it's obvious Judge Mode is on.")]
     [SerializeField] private TextMeshProUGUI judgeModeButtonText;
 
     [Header("Confirmation")]

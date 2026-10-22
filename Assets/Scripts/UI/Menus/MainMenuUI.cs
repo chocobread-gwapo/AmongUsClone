@@ -24,7 +24,7 @@ public class MainMenuUI : MonoBehaviour
     [SerializeField] private GameObject mainButtonsPanel;
     [Tooltip("Root panel holding LobbyConnectionUI's Host/Join controls. Hidden until PLAY is pressed.")]
     [SerializeField] private GameObject playPanel;
-    [Tooltip("Simple options panel (e.g. a volume slider wired to AudioManager.SetVolume). Optional — leave empty if you don't have one yet; the SETTINGS button just won't do anything.")]
+    [Tooltip("Simple options panel (e.g. a volume slider wired to AudioManager.SetVolume). Optional: leave empty if you don't have one yet; the SETTINGS button just won't do anything.")]
     [SerializeField] private GameObject settingsPanel;
 
     private void Awake()

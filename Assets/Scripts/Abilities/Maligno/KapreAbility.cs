@@ -32,7 +32,7 @@ public class KapreAbility : NetworkBehaviour
 
     public bool IsMyAbility()
     {
-        return myRole != null && myRole.CurrentMalignoType == MalignoType.Kapre;
+        return myRole != null && myRole.IsAlive && myRole.CurrentMalignoType == MalignoType.Kapre; // dead players cannot use abilities
     }
 
     // See TikbalangAbility.ServerResetForNewGame() for why this is needed.

@@ -16,13 +16,13 @@ public class AbilityCooldownUI : MonoBehaviour
     public static AbilityCooldownUI Instance { get; private set; }
 
     [Header("Kill Cooldown Display (overlay on the KILL button)")]
-    [Tooltip("The on-screen KILL button itself — gets disabled while the kill is on cooldown.")]
+    [Tooltip("The on-screen KILL button itself: gets disabled while the kill is on cooldown.")]
     [SerializeField] private GameObject killCooldownRoot;
     [Tooltip("A TextMeshPro child sitting on top of the KILL button, showing the countdown number.")]
     [SerializeField] private TextMeshProUGUI killCooldownText;
 
     [Header("Ability Cooldown Display (overlay on the ABILITY button)")]
-    [Tooltip("The on-screen ABILITY button — gets disabled while any ability is on cooldown.")]
+    [Tooltip("The on-screen ABILITY button: gets disabled while any ability is on cooldown.")]
     [SerializeField] private Button abilityButton;
     [Tooltip("A TextMeshPro child sitting on top of the ABILITY button, showing the countdown number.")]
     [SerializeField] private TextMeshProUGUI abilityCooldownText;

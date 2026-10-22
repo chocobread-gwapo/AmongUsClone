@@ -10,15 +10,15 @@ using UnityEngine.UI;
 //    dropped) gets a "CONNECTION LOST" screen with a button back to the main menu.
 //  * The HOST, when a player drops: the match re-checks its win conditions, an open vote
 //    finishes without them, their body stays reportable, and everyone gets a notice.
-// There is no host migration: with Relay the host owns the match, so if the host leaves the
-// match ends for everyone.
+// When the host leaves, the match ends but the group is kept together: a new host is elected by
+// the UGS session and everyone meets again in a fresh lobby (host migration without match state).
 public class DisconnectHandler : MonoBehaviour
 {
     private static DisconnectHandler instance;
 
     private NetworkManager subscribedTo;
     private GameObject overlay;
-    private TextMeshProUGUI reasonText;
+    private TextMeshProUGUI reasonText, titleText;
     private bool quitting;
     private bool shown;
 
@@ -94,10 +94,44 @@ public class DisconnectHandler : MonoBehaviour
         if (shown) return;
         if (SceneManager.GetActiveScene().name == "MainMenu") return;
         shown = true;
+
+        var conn = MultiplayerConnectionManager.Instance;
+        if (conn != null && conn.CanMigrate)
+        {
+            StartMigration(conn, reason);
+            return;
+        }
+        ShowFinal(reason);
+    }
+
+    private void ShowFinal(string reason)
+    {
+        titleText.text = "CONNECTION LOST";
         reasonText.text = string.IsNullOrEmpty(reason)
             ? "The connection to the host was lost.\nThe host may have quit, or your internet dropped."
             : reason;
         overlay.SetActive(true);
+    }
+
+    // Keep-the-group-together host migration: see MultiplayerConnectionManager.TryMigrateAsync.
+    private async void StartMigration(MultiplayerConnectionManager conn, string reason)
+    {
+        titleText.text = "HOST LEFT";
+        reasonText.text = "Choosing a new host...\nStay here. Everyone will meet in a new lobby.";
+        overlay.SetActive(true);
+
+        bool ok = await conn.TryMigrateAsync(msg => { if (shown && reasonText != null) reasonText.text = msg; });
+
+        if (!shown) return; // the player pressed the button and left
+        if (ok)
+        {
+            overlay.SetActive(false);
+            shown = false;
+        }
+        else
+        {
+            ShowFinal(reason);
+        }
     }
 
     private async void OnBackClicked()
@@ -124,8 +158,8 @@ public class DisconnectHandler : MonoBehaviour
         ort.anchorMin = Vector2.zero; ort.anchorMax = Vector2.one; ort.offsetMin = ort.offsetMax = Vector2.zero;
         overlay.GetComponent<Image>().color = new Color(0.02f, 0.03f, 0.05f, 1f);
 
-        var title = Text(overlay.transform, 72, new Color(0.9f, 0.3f, 0.3f), new Vector2(0, 120), new Vector2(1400, 110));
-        title.text = "CONNECTION LOST";
+        titleText = Text(overlay.transform, 72, new Color(0.9f, 0.3f, 0.3f), new Vector2(0, 120), new Vector2(1400, 110));
+        titleText.text = "CONNECTION LOST";
         reasonText = Text(overlay.transform, 32, Color.white, new Vector2(0, 10), new Vector2(1400, 140));
 
         var btn = new GameObject("BackButton", typeof(RectTransform), typeof(Image), typeof(Button));
@@ -138,7 +172,7 @@ public class DisconnectHandler : MonoBehaviour
         var label = Text(btn.transform, 34, new Color(0.02f, 0.06f, 0.07f), Vector2.zero, Vector2.zero);
         label.rectTransform.anchorMin = Vector2.zero; label.rectTransform.anchorMax = Vector2.one;
         label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
-        label.text = "BACK TO MAIN MENU";
+        label.text = "LEAVE TO MAIN MENU";
 
         overlay.SetActive(false);
     }

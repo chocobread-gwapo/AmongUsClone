@@ -22,6 +22,72 @@ public class MeetingManager : NetworkBehaviour
 
     public bool IsMeetingActive => isMeetingActive.Value;
 
+    [Header("Emergency Meeting Rules")]
+    [Tooltip("How many emergency meetings each player may call per match (body reports are unlimited).")]
+    [SerializeField] private int emergencyCallsPerPlayer = 1;
+    [Tooltip("Seconds after a match starts, and after every meeting ends, before an emergency meeting can be called.")]
+    [SerializeField] private float emergencyCooldown = 20f;
+
+    // Server time (seconds) at which emergency calls unlock; synced so every client can show a countdown.
+    private readonly NetworkVariable<double> emergencyReadyAt = new NetworkVariable<double>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private readonly Dictionary<ulong, int> emergencyCallsUsed = new Dictionary<ulong, int>();
+    private bool sawGameStarted;
+
+    public int EmergencyCallsPerPlayer => emergencyCallsPerPlayer;
+    public float EmergencyCooldownRemaining =>
+        NetworkManager.Singleton == null ? 0f : Mathf.Max(0f, (float)(emergencyReadyAt.Value - NetworkManager.Singleton.ServerTime.Time));
+
+    // Local client's remaining emergency calls (set by the server via RPC; -1 = unknown, treat as full).
+    public static int LocalCallsLeft = -1;
+    public static event System.Action<string> EmergencyDenied;
+
+    private void Update()
+    {
+        if (!IsServer) return;
+        bool started = GameStartManager.Instance != null && GameStartManager.Instance.GameStarted;
+        if (started && !sawGameStarted)
+        {
+            emergencyCallsUsed.Clear();
+            emergencyReadyAt.Value = NetworkManager.ServerTime.Time + emergencyCooldown;
+            SyncCallsLeftClientRpc(emergencyCallsPerPlayer);
+        }
+        sawGameStarted = started;
+    }
+
+    [ClientRpc]
+    private void SyncCallsLeftClientRpc(int left, ClientRpcParams rpcParams = default)
+    {
+        LocalCallsLeft = left;
+    }
+
+    [ClientRpc]
+    private void EmergencyDeniedClientRpc(string message, ClientRpcParams rpcParams = default)
+    {
+        EmergencyDenied?.Invoke(message);
+    }
+
+    private static ClientRpcParams Only(ulong id)
+    {
+        return new ClientRpcParams { Send = new ClientRpcSendParams { TargetClientIds = new[] { id } } };
+    }
+
+    // Called by DisconnectHandler on the server after a player drops. Forgets their
+    // vote and emergency-call count, and finishes an open vote if everyone left has voted.
+    public void ServerOnPlayerLeft(ulong clientId)
+    {
+        if (!IsServer) return;
+        votes.Remove(clientId);
+        emergencyCallsUsed.Remove(clientId);
+        if (isMeetingActive.Value && AllAlivePlayersHaveVoted()) ResolveVotes();
+    }
+
+    private void ServerOnMeetingEnded()
+    {
+        emergencyReadyAt.Value = NetworkManager.ServerTime.Time + emergencyCooldown;
+    }
+
     // Server-only state — votes are tallied here, never exposed directly to clients
     private Dictionary<ulong, ulong> votes = new Dictionary<ulong, ulong>(); // voterClientId -> votedClientId
     private const ulong SKIP_VOTE = ulong.MaxValue;
@@ -58,23 +124,28 @@ public class MeetingManager : NetworkBehaviour
         // back to the real PlayerRole it represents either way, so the
         // Bal-Bal / alive checks below stay exactly as they were.
         PlayerRole bodyRole;
+        bool orphanBody = false; // the dead player disconnected; their body can still be reported
         DeadBody deadBody = bodyObj.GetComponent<DeadBody>();
         if (deadBody != null)
         {
-            if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(deadBody.OriginalPlayerId, out NetworkObject originalPlayerObj))
-                return;
-            bodyRole = originalPlayerObj.GetComponent<PlayerRole>();
+            if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(deadBody.OriginalPlayerId, out NetworkObject originalPlayerObj))
+                bodyRole = originalPlayerObj.GetComponent<PlayerRole>();
+            else
+            {
+                bodyRole = null;
+                orphanBody = true;
+            }
         }
         else
         {
             bodyRole = bodyObj.GetComponent<PlayerRole>();
         }
 
-        if (bodyRole == null || bodyRole.IsAlive) return; // can't report a living player
+        if (!orphanBody && (bodyRole == null || bodyRole.IsAlive)) return; // can't report a living player
 
         // Bal-bal's victim leaves no trace — the real body is never
         // reportable, even by someone standing right on top of it.
-        if (bodyRole.IsBalBalConsumed) return;
+        if (bodyRole != null && bodyRole.IsBalBalConsumed) return;
 
         Debug.Log($"[Server] Body reported. Starting meeting.");
         StartMeeting();
@@ -93,9 +164,26 @@ public class MeetingManager : NetworkBehaviour
         // client-side CallMeetingButton check is just a UX nicety.
         if (!TryGetPlayerRoleByClientId(callerId, out PlayerRole callerRole) || !callerRole.IsAlive) return;
 
-        // (Optional future improvement: track per-player meeting call limits here)
+        if (GameStartManager.Instance == null || !GameStartManager.Instance.GameStarted) return;
+        if (GameResultManager.Instance != null && GameResultManager.Instance.GameEnded) return;
 
-        Debug.Log($"[Server] Emergency meeting called by client {callerId}.");
+        float wait = EmergencyCooldownRemaining;
+        if (wait > 0f)
+        {
+            EmergencyDeniedClientRpc("Emergency meeting is on cooldown (" + Mathf.CeilToInt(wait) + "s).", Only(callerId));
+            return;
+        }
+
+        emergencyCallsUsed.TryGetValue(callerId, out int used);
+        if (used >= emergencyCallsPerPlayer)
+        {
+            EmergencyDeniedClientRpc("You have no emergency meetings left.", Only(callerId));
+            return;
+        }
+        emergencyCallsUsed[callerId] = used + 1;
+        SyncCallsLeftClientRpc(emergencyCallsPerPlayer - (used + 1), Only(callerId));
+
+        Debug.Log($"[Server] Emergency meeting called by client {callerId} ({used + 1}/{emergencyCallsPerPlayer}).");
         StartMeeting();
     }
 
@@ -206,6 +294,7 @@ public class MeetingManager : NetworkBehaviour
         foreach (var vote in votes.Values)
         {
             if (vote == SKIP_VOTE) continue;
+            if (!NetworkManager.Singleton.ConnectedClients.ContainsKey(vote)) continue; // target left
             if (!tally.ContainsKey(vote)) tally[vote] = 0;
             tally[vote]++;
         }
@@ -255,6 +344,7 @@ public class MeetingManager : NetworkBehaviour
         }
 
         ExtendAllCooldownsByMeetingDuration();
+        ServerOnMeetingEnded();
         votes.Clear();
         isMeetingActive.Value = false;
     }
@@ -313,6 +403,7 @@ public class MeetingManager : NetworkBehaviour
         }
 
         ExtendAllCooldownsByMeetingDuration();
+        ServerOnMeetingEnded();
         votes.Clear();
         isMeetingActive.Value = false;
     }

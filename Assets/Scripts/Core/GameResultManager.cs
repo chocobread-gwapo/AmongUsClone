@@ -118,6 +118,19 @@ public class GameResultManager : NetworkBehaviour
         GameOverUI.Instance?.ShowResult(crewWon, headline, reason, ids, roles, types, classes, alive, tasksDone, tasksTotal);
     }
 
+    // Server-only: show a short notice (toast) to every player, e.g. "Player 3 left the game".
+    public void ServerBroadcastNotice(string message)
+    {
+        if (!IsServer) return;
+        NoticeClientRpc(message);
+    }
+
+    [ClientRpc]
+    private void NoticeClientRpc(string message, ClientRpcParams rpcParams = default)
+    {
+        Notice.Show(message);
+    }
+
     // Called by GameStartManager.HostReturnToLobby() — clears the ended flag
     // so GameResultManager.CheckWinConditions() can evaluate again next match.
     public void ServerResetForNewGame()

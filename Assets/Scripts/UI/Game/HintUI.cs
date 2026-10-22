@@ -187,7 +187,7 @@ public class HintUI : MonoBehaviour
                 break;
             case "meeting":
                 title = "MEETING";
-                body = "Call everyone together to discuss who looks suspicious, then vote someone out.";
+                body = "Call everyone together to discuss who looks suspicious, then vote someone out. Each player gets a limited number of calls, and there is a cooldown after the match starts and after every meeting.";
                 break;
             default: // ability
                 title = "ABILITY" + K("Ability");

@@ -48,6 +48,9 @@ public class MultiplayerConnectionManager : MonoBehaviour
     [SerializeField] private GameObject gameStartManagerPrefab;
 
     public string CurrentJoinCode { get; private set; } = "";
+    // True from the moment the player chooses to leave until the next host/join, so the
+    // disconnect screen does not pop up for a disconnect they asked for.
+    public bool IsLeaving { get; private set; }
     public bool IsSignedIn => AuthenticationService.Instance != null && AuthenticationService.Instance.IsSignedIn;
 
     // Fired with a human-readable status string any time something worth
@@ -105,6 +108,7 @@ public class MultiplayerConnectionManager : MonoBehaviour
     // join code to show the host, so they can share it with friends.
     public async Task<string> HostGameAsync()
     {
+        IsLeaving = false;
         try
         {
             await EnsureSignedInAsync();
@@ -199,6 +203,7 @@ public class MultiplayerConnectionManager : MonoBehaviour
         }
 
         joinCode = joinCode.Trim().ToUpperInvariant();
+        IsLeaving = false;
 
         try
         {
@@ -241,6 +246,7 @@ public class MultiplayerConnectionManager : MonoBehaviour
     // UGS session are released properly instead of just abandoning them.
     public async Task LeaveSessionAsync()
     {
+        IsLeaving = true;
         try
         {
             if (NetworkManager.Singleton != null && (NetworkManager.Singleton.IsHost || NetworkManager.Singleton.IsClient))

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using Unity.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 // A role's configurable settings: how many of it can appear this match
 // (a hard cap), and its relative weight when randomly picking among roles
@@ -174,6 +175,13 @@ public class GameStartManager : NetworkBehaviour
 
     public bool GameStarted => gameStarted.Value;
 
+    [Header("Scenes (exact names from Build Settings)")]
+    [SerializeField] private string gameSceneName = "Game";
+    [SerializeField] private string lobbySceneName = "Lobby";
+
+    // Guards against double-clicks / overlapping scene loads.
+    private bool sceneTransitionInProgress = false;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -182,6 +190,11 @@ public class GameStartManager : NetworkBehaviour
             return;
         }
         Instance = this;
+
+        // Spawned once by MultiplayerConnectionManager and must survive the
+        // Lobby <-> Game scene switches (NetworkObject "Destroy With Scene"
+        // is unchecked on the prefab too).
+        DontDestroyOnLoad(gameObject);
 
         // Construct here — the NetworkList object itself needs to exist
         // before NGO registers this NetworkBehaviour's variables. But don't
@@ -219,23 +232,39 @@ public class GameStartManager : NetworkBehaviour
             return;
         }
 
-        if (gameStarted.Value)
+        if (gameStarted.Value || sceneTransitionInProgress)
         {
-            Debug.LogWarning("Game already started.");
+            Debug.LogWarning("Game already started (or starting).");
             return;
         }
 
-        AssignRoles();
-        gameStarted.Value = true;
+        // Among Us flow: Start loads the match scene for everyone FIRST;
+        // roles are assigned only once every client has finished loading it,
+        // so RoleRevealUI / HUD actually exist when the role RPCs arrive.
+        sceneTransitionInProgress = true;
+        NetworkManager.Singleton.SceneManager.OnLoadEventCompleted += HandleGameSceneLoaded;
 
-        NotifyGameStartedClientRpc();
+        var status = NetworkManager.Singleton.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
+        if (status != SceneEventProgressStatus.Started)
+        {
+            Debug.LogError($"[Server] Couldn't load \"{gameSceneName}\": {status}. Is it in Build Settings with that exact name?");
+            NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= HandleGameSceneLoaded;
+            sceneTransitionInProgress = false;
+        }
     }
 
-    [ClientRpc]
-    private void NotifyGameStartedClientRpc()
+    private void HandleGameSceneLoaded(string sceneName, LoadSceneMode mode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
     {
-        if (StartGameButtonUI.Instance != null) StartGameButtonUI.Instance.Hide();
-        if (GameHudUI.Instance != null) GameHudUI.Instance.Show();
+        if (sceneName != gameSceneName) return;
+
+        NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= HandleGameSceneLoaded;
+        sceneTransitionInProgress = false;
+
+        if (clientsTimedOut != null && clientsTimedOut.Count > 0)
+            Debug.LogWarning($"[Server] {clientsTimedOut.Count} client(s) timed out loading the Game scene.");
+
+        AssignRoles();
+        gameStarted.Value = true;
     }
 
     private void AssignRoles()
@@ -414,6 +443,8 @@ public class GameStartManager : NetworkBehaviour
             return;
         }
 
+        if (sceneTransitionInProgress) return;
+
         // Reset every connected player: alive again, Crewmate until next
         // AssignRoles(), controls re-enabled.
         foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
@@ -435,30 +466,39 @@ public class GameStartManager : NetworkBehaviour
             client.PlayerObject.GetComponent<TarotUserAbility>()?.ServerResetForNewGame();
         }
 
-        TaskManager.Instance?.ServerResetAllTasks();
-        GameResultManager.Instance?.ServerResetForNewGame();
-
+        // TaskManager, GameResultManager, TaskZones, HUD, GameOverUI and
+        // cooldown UI all live in the Game scene, which is unloaded below and
+        // loaded fresh next match — nothing to reset for them. Only state on
+        // the persistent player objects (above) and statics need clearing.
         gameStarted.Value = false;
+        ClearStaticMatchStateClientRpc();
 
-        Debug.Log("[Server] Returned to lobby — ready for a new match.");
-        NotifyReturnedToLobbyClientRpc();
+        sceneTransitionInProgress = true;
+        NetworkManager.Singleton.SceneManager.OnLoadEventCompleted += HandleLobbySceneLoaded;
+
+        var status = NetworkManager.Singleton.SceneManager.LoadScene(lobbySceneName, LoadSceneMode.Single);
+        if (status != SceneEventProgressStatus.Started)
+        {
+            Debug.LogError($"[Server] Couldn't load \"{lobbySceneName}\": {status}. Is it in Build Settings with that exact name?");
+            NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= HandleLobbySceneLoaded;
+            sceneTransitionInProgress = false;
+        }
     }
 
-    [ClientRpc]
-    private void NotifyReturnedToLobbyClientRpc()
+    private void HandleLobbySceneLoaded(string sceneName, LoadSceneMode mode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
     {
-        if (GameOverUI.Instance != null) GameOverUI.Instance.Hide();
-        if (StartGameButtonUI.Instance != null) StartGameButtonUI.Instance.Show();
-        if (GameHudUI.Instance != null) GameHudUI.Instance.Hide();
+        if (sceneName != lobbySceneName) return;
 
-        // Banana-trunk decoys are purely local props (never NetworkObjects),
-        // so nothing else clears them — do it here on every client so last
-        // match's decoys don't carry over into the next one.
+        NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= HandleLobbySceneLoaded;
+        sceneTransitionInProgress = false;
+        Debug.Log("[Server] Back in the lobby — ready for a new match.");
+    }
+
+    // Statics survive scene unloads, so stale banana-trunk references would
+    // otherwise pile up across matches.
+    [ClientRpc]
+    private void ClearStaticMatchStateClientRpc()
+    {
         BalBalAbility.ClearAllTrunks();
-
-        // Force every ability/kill button back to ready right away, rather
-        // than leaving it dimmed/counting down from whatever cooldown
-        // happened to still be running when the match ended.
-        AbilityCooldownUI.Instance?.ResetAll();
     }
 }

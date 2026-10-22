@@ -2,6 +2,10 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
+// NOTE: adds local-only (non-networked) heal-target glow highlighting —
+// see TargetOutline.cs and PlayerController.UpdateKillTargetHighlighting()
+// for the same pattern applied to kill targets.
+
 // Albularyo — Survivor Class "Pag-aalaga" (Heal)
 // Cures a nearby Villager currently cursed by Duwende's Nuno mound trap:
 // ends their slow + vision reduction immediately instead of making them
@@ -15,6 +19,8 @@ public class AlbularyoAbility : NetworkBehaviour
     [Header("Pag-aalaga (Heal)")]
     [SerializeField] private float healRange = 1.5f;
     [SerializeField] private float cooldownDuration = 30f;
+    [Tooltip("Color of the heal-target outline glow (see TargetOutline.cs).")]
+    [SerializeField] private Color healHighlightColor = Color.green;
 
     [Header("Heal Glow (local, nearby-only)")]
     [Tooltip("Only players within this many units of the heal see the green glow — everyone else never even receives the event.")]
@@ -26,6 +32,15 @@ public class AlbularyoAbility : NetworkBehaviour
     // Server-only.
     private float serverCooldownEndTime = -999f;
 
+    // Client-side mirror (owner only) — same reasoning as PlayerController's
+    // localKillCooldownEndTime: needed so the heal-target glow (local-only,
+    // see below) can tell when the ability is actually usable without
+    // trusting the server-only field above, which never updates on clients.
+    private float localCooldownEndTime = -999f;
+
+    private readonly HashSet<TargetOutline> highlightedHealTargets = new HashSet<TargetOutline>();
+    private readonly List<TargetOutline> healTargetScratch = new List<TargetOutline>();
+
     private void Awake()
     {
         myRole = GetComponent<PlayerRole>();
@@ -36,11 +51,73 @@ public class AlbularyoAbility : NetworkBehaviour
         return myRole != null && myRole.CurrentSurvivorClass == SurvivorClass.Albularyo;
     }
 
+    // Local-only cosmetic — runs every frame for the owner regardless of
+    // IsBlocked()/role, same reasoning as PlayerController's equivalent:
+    // needs to be able to CLEAR a stale glow immediately, not just add new ones.
+    private void Update()
+    {
+        if (!IsOwner) return;
+        UpdateHealTargetHighlighting();
+    }
+
+    private void UpdateHealTargetHighlighting()
+    {
+        bool meetingActive = MeetingManager.Instance != null && MeetingManager.Instance.IsMeetingActive;
+        bool gameOver = GameResultManager.Instance != null && GameResultManager.Instance.GameEnded;
+        bool canHealNow = IsMyAbility() && myRole != null && myRole.IsAlive
+            && Time.time >= localCooldownEndTime && !meetingActive && !gameOver;
+
+        healTargetScratch.Clear();
+        if (canHealNow)
+        {
+            Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, healRange);
+            foreach (var hit in hits)
+            {
+                CurseStatus curse = hit.GetComponent<CurseStatus>();
+                if (curse == null || !curse.IsCursed) continue;
+
+                PlayerRole targetRole = hit.GetComponent<PlayerRole>();
+                if (targetRole == null || !targetRole.IsAlive) continue;
+
+                TargetOutline outline = hit.GetComponent<TargetOutline>();
+                if (outline != null) healTargetScratch.Add(outline);
+            }
+        }
+
+        highlightedHealTargets.RemoveWhere(outline =>
+        {
+            bool stillValid = outline != null && healTargetScratch.Contains(outline);
+            if (!stillValid && outline != null) outline.SetHighlighted(false);
+            return !stillValid;
+        });
+
+        foreach (var outline in healTargetScratch)
+        {
+            if (highlightedHealTargets.Add(outline))
+            {
+                outline.SetHighlighted(true, healHighlightColor);
+            }
+        }
+    }
+
     // See TikbalangAbility.ServerResetForNewGame() for why this is needed.
     public void ServerResetForNewGame()
     {
         if (!IsServer) return;
         serverCooldownEndTime = -999f;
+
+        ClientRpcParams targetOnlyOwner = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
+        };
+        NotifyCooldownResetClientRpc(targetOnlyOwner);
+    }
+
+    [ClientRpc]
+    private void NotifyCooldownResetClientRpc(ClientRpcParams rpcParams = default)
+    {
+        if (!IsOwner) return;
+        localCooldownEndTime = -999f;
     }
 
     public void ServerExtendCooldownIfActive(float seconds)
@@ -122,6 +199,7 @@ public class AlbularyoAbility : NetworkBehaviour
     private void NotifyCooldownStartedClientRpc(float duration)
     {
         if (!IsOwner) return;
+        localCooldownEndTime = Time.time + duration;
         Debug.Log($"[Client] Pag-aalaga used — {duration}s cooldown.");
         AbilityCooldownUI.Instance?.StartAbilityCooldown(duration);
     }

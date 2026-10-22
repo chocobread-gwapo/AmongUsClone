@@ -35,9 +35,9 @@ public class GameHudUI : MonoBehaviour
 
     private void Start()
     {
-        // Starts hidden — the lobby is the default state until
-        // GameStartManager confirms a match has actually begun.
-        SetVisible(false);
+        // The Game scene only exists during a match (the lobby is its own
+        // scene now), so the HUD is simply visible from the start.
+        SetVisible(true);
     }
 
     private void Update()

@@ -81,6 +81,18 @@ public class BalBalAbility : NetworkBehaviour
 
         Vector3 deathPosition = targetObj.transform.position;
 
+        // SERVER-AUTHORITATIVE RANGE CHECK — same gap as RequestKillServerRpc
+        // had: TryActivate()'s OverlapCircleAll above is client-side only, so
+        // without this a modified client could send ConsumeBodyServerRpc with
+        // any target's id from anywhere on the map.
+        float distanceToTarget = Vector2.Distance(transform.position, deathPosition);
+        if (distanceToTarget > targetRange * 1.5f)
+        {
+            Debug.LogWarning($"[Server] Rejected consume-body request from {gameObject.name}: " +
+                $"{distanceToTarget:F2} units from target (max {targetRange * 1.5f:F2}).");
+            return;
+        }
+
         targetRole.Kill();
         targetRole.ServerMarkBalBalConsumed();
         myController?.ServerStartKillCooldown();

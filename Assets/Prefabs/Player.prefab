@@ -532,6 +532,7 @@ GameObject:
   - component: {fileID: 7566472482078722507}
   - component: {fileID: 5512922188452733733}
   - component: {fileID: -980340813718679854}
+  - component: {fileID: -4924099882870505008}
   m_Layer: 3
   m_Name: Player
   m_TagString: Untagged
@@ -695,7 +696,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2905397445
+  GlobalObjectIdHash: 2749617844
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -735,6 +736,7 @@ MonoBehaviour:
   reportAction: {fileID: 8702582315592911047, guid: 247eee230a501084bb43ffd414552c0a, type: 3}
   abilityAction: {fileID: -8871053595441117961, guid: 247eee230a501084bb43ffd414552c0a, type: 3}
   killRange: 1.2
+  killHighlightColor: {r: 1, g: 0, b: 0, a: 1}
   reportRange: 1.5
 --- !u!114 &9175266124497888759
 MonoBehaviour:
@@ -1014,6 +1016,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   healRange: 1.5
   cooldownDuration: 30
+  healHighlightColor: {r: 0, g: 1, b: 0, a: 1}
   healGlowVisibilityRadius: 5
   healGlowDuration: 1.5
 --- !u!114 &-8545991438311214789
@@ -1154,6 +1157,21 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   frameDuration: 0.15
+--- !u!114 &-4924099882870505008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5095291193812127684}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 858f88923a268ca49bf533b014fd03ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TargetOutline
+  offsetDistance: 0.05
+  outlineColor: {r: 1, g: 1, b: 1, a: 1}
+  silhouetteShader: {fileID: 4800000, guid: 7df316472037fe6419786e972481ec03, type: 3}
 --- !u!1001 &4492951778481534029
 PrefabInstance:
   m_ObjectHideFlags: 0

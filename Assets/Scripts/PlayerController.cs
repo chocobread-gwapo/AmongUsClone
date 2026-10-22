@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -26,6 +27,8 @@ public class PlayerController : NetworkBehaviour
 
     [Header("Kill Settings")]
     [SerializeField] private float killRange = 1.2f;
+    [Tooltip("Color of the kill-target outline glow (see TargetOutline.cs).")]
+    [SerializeField] private Color killHighlightColor = Color.red;
 
     // Server-only — never exposed to clients directly. Falls back to 15s if
     // GameStartManager isn't found, so a kill is never silently unlimited.
@@ -87,6 +90,15 @@ public class PlayerController : NetworkBehaviour
     // ---- Server-side movement validation state (server-only, unused on clients) ----
     private Vector3 serverLastValidatedPosition;
     private float serverValidationTimer;
+
+    // ---- Kill-target highlighting (local-only cosmetic, see TargetOutline.cs) ----
+    // Nothing here is networked — each client decides for itself, every
+    // frame, who ITS OWN local player can currently kill, and toggles the
+    // glow directly on those targets' own TargetOutline components. Other
+    // clients never run this for anyone but their own local player, so a
+    // Villager never sees any glow at all, same as Among Us.
+    private readonly HashSet<TargetOutline> highlightedKillTargets = new HashSet<TargetOutline>();
+    private readonly List<TargetOutline> killTargetScratch = new List<TargetOutline>();
 
     private void Awake()
     {
@@ -185,6 +197,11 @@ public class PlayerController : NetworkBehaviour
         }
 
         if (!IsOwner) return;
+
+        // Runs every frame regardless of IsBlocked() below — it needs to be
+        // able to CLEAR highlights the instant a meeting starts or this
+        // player dies, not just stop adding new ones.
+        UpdateKillTargetHighlighting();
 
         if (IsBlocked())
         {
@@ -288,6 +305,52 @@ public class PlayerController : NetworkBehaviour
     // every safety check (IsImpostor, IsAlive, cooldown, range), so this is
     // safe to wire up even though a Survivor pressing it will just no-op.
     public void OnKillButtonPressed() => TryKill();
+
+    // Among-Us-style white glow on anyone this player can currently kill.
+    // Re-evaluated every frame (cheap: one OverlapCircleAll + a HashSet
+    // diff, same OverlapCircleAll already used for the real kill check) so
+    // the glow appears/disappears the instant a target steps in/out of
+    // range, dies, becomes a fellow Maligno via Aswang's disguise, etc.
+    private void UpdateKillTargetHighlighting()
+    {
+        var myRole = GetComponent<PlayerRole>();
+        bool canKillNow = myRole != null && myRole.IsImpostor && myRole.IsAlive
+            && Time.time >= localKillCooldownEndTime && !IsBlocked();
+
+        killTargetScratch.Clear();
+        if (canKillNow)
+        {
+            Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, killRange);
+            foreach (var hit in hits)
+            {
+                if (hit.gameObject == gameObject) continue;
+                if (hit.GetComponent<Killable>() == null) continue;
+
+                PlayerRole hitRole = hit.GetComponent<PlayerRole>();
+                if (hitRole != null && hitRole.IsImpostor) continue;
+
+                TargetOutline outline = hit.GetComponent<TargetOutline>();
+                if (outline != null) killTargetScratch.Add(outline);
+            }
+        }
+
+        // Turn off anything highlighted last frame that isn't valid anymore.
+        highlightedKillTargets.RemoveWhere(outline =>
+        {
+            bool stillValid = outline != null && killTargetScratch.Contains(outline);
+            if (!stillValid && outline != null) outline.SetHighlighted(false);
+            return !stillValid;
+        });
+
+        // Turn on anything newly valid.
+        foreach (var outline in killTargetScratch)
+        {
+            if (highlightedKillTargets.Add(outline))
+            {
+                outline.SetHighlighted(true, killHighlightColor);
+            }
+        }
+    }
 
     private bool HasValidKillTargetInRange()
     {
@@ -442,6 +505,9 @@ public class PlayerController : NetworkBehaviour
     {
         if (ServerIsKillOnCooldown()) return;
 
+        var myRole = GetComponent<PlayerRole>();
+        if (myRole == null || !myRole.IsImpostor || !myRole.IsAlive) return;
+
         if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObj))
         {
             // Server-authoritative check — a modified client could otherwise
@@ -454,6 +520,25 @@ public class PlayerController : NetworkBehaviour
             // it doesn't (only isAlive flips, DeadBody spawns separately),
             // but reading it first costs nothing and stays correct either way.
             Vector3 victimPosition = targetObj.transform.position;
+
+            // SERVER-AUTHORITATIVE RANGE CHECK — this was missing entirely.
+            // PlayerController's client-side OverlapCircleAll in TryKill() is
+            // only a UX nicety (keeps a legit client from even sending a
+            // request when clearly out of range); it does nothing to stop a
+            // modified client from sending RequestKillServerRpc with any
+            // target's NetworkObjectId regardless of actual distance. This is
+            // the real gate. A small tolerance is added on top of killRange
+            // to absorb the same kind of network/position staleness the
+            // movement validator already tolerates (speedToleranceMultiplier),
+            // not to be generous about cheating.
+            float distanceToVictim = Vector2.Distance(transform.position, victimPosition);
+            float maxKillDistance = killRange * speedToleranceMultiplier;
+            if (distanceToVictim > maxKillDistance)
+            {
+                Debug.LogWarning($"[Server] Rejected kill request from {gameObject.name}: " +
+                    $"{distanceToVictim:F2} units from target (max {maxKillDistance:F2}).");
+                return;
+            }
 
             Killable target = targetObj.GetComponent<Killable>();
             if (target != null && target.TryKill())

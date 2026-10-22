@@ -107,6 +107,7 @@ public class PlayerRole : NetworkBehaviour
         // Role.Crewmate), so the button correctly hides again on return to
         // lobby without any extra code there.
         KillButton.Instance?.SetVisible(role == Role.Impostor);
+        UpdateAbilityButtonVisibility();
 
         // showReveal is false on a lobby reset — only a REAL assignment at
         // match start should pop the "you are X" screen.
@@ -143,12 +144,28 @@ public class PlayerRole : NetworkBehaviour
             Debug.Log($"[Client] Your Survivor Class: {survivorClass}");
         }
 
+        UpdateAbilityButtonVisibility();
+
         // Same reasoning as ReceiveRoleClientRpc's showReveal — only a real
         // assignment should extend the reveal panel, not a lobby reset.
         if (showReveal)
         {
             RoleRevealUI.Instance?.AppendSurvivorClass(survivorClass);
         }
+    }
+
+    // Shown for anything actually wired through PlayerController.
+    // TryUseAbility() — every Maligno type (Impostor), and every Survivor
+    // Class EXCEPT Babaylan, whose "Judge Skill" is meeting-only and goes
+    // through MeetingUI's own Judge Mode toggle instead of this button.
+    // Role and Survivor Class arrive via two SEPARATE RPCs that can land in
+    // either order, so this re-evaluates from both cached fields every time
+    // either one updates, rather than assuming which one fired most recently.
+    private void UpdateAbilityButtonVisibility()
+    {
+        bool show = localCachedRole == Role.Impostor
+            || (localCachedSurvivorClass != SurvivorClass.None && localCachedSurvivorClass != SurvivorClass.Babaylan);
+        AbilityButton.Instance?.SetVisible(show);
     }
 
     // spawnBody defaults to false so every EXISTING call site (meeting

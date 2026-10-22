@@ -2430,6 +2430,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SceneSpawnPoints
   center: {fileID: 1424498037}
+  emergencyReach: 3
   ringRadius: 2.5
 --- !u!4 &365462601
 Transform:
@@ -3801,7 +3802,11 @@ MonoBehaviour:
         m_SelectedSource:
           rid: -2
         m_Provider2DCache:
-          rid: -2
+          rid: 2786298205217489076
+    - rid: 2786298205217489076
+      type: {class: 'Provider2DCache`1[[UnityEngine.Rendering.Universal.Light2DProvider, Unity.RenderPipelines.Universal.2D.Runtime]]', ns: UnityEngine.Rendering.Universal, asm: Unity.RenderPipelines.Universal.2D.Runtime}
+      data:
+        m_Cache: []
 --- !u!4 &766963779
 Transform:
   m_ObjectHideFlags: 0
@@ -11319,6 +11324,8 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   votingDuration: 30
   reportRange: 1.5
+  emergencyCallsPerPlayer: 1
+  emergencyCooldown: 20
 --- !u!114 &2079695641
 MonoBehaviour:
   m_ObjectHideFlags: 0

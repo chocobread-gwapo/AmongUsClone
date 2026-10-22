@@ -65,12 +65,29 @@ public class MeetingUI : MonoBehaviour
 
     private bool wasActiveLastCheck = false;
 
+    private bool discussionOver = true;
+
     private void Update()
     {
-        if (timerText == null || votingPanel == null || !votingPanel.activeSelf) return;
-        float duration = GameStartManager.Instance != null ? GameStartManager.Instance.MeetingDuration : 30f;
-        float left = Mathf.Max(0f, duration - (Time.time - meetingOpenedAt));
-        timerText.text = $"VOTING ENDS IN {Mathf.CeilToInt(left)}s";
+        if (votingPanel == null || !votingPanel.activeSelf) return;
+        var g = GameStartManager.Instance;
+        float discussion = g != null ? g.DiscussionTime : 0f;
+        float voting = g != null ? g.MeetingDuration : 30f;
+        float elapsed = Time.time - meetingOpenedAt;
+
+        if (elapsed < discussion)
+        {
+            if (timerText != null) timerText.text = $"DISCUSSION ENDS IN {Mathf.CeilToInt(discussion - elapsed)}s";
+            return;
+        }
+
+        if (!discussionOver)
+        {
+            discussionOver = true;
+            if (localPlayerIsAlive && !hasVotedThisMeeting && !hasPendingTarget) SetPlayerButtonsInteractable(true);
+        }
+        if (timerText != null)
+            timerText.text = $"VOTING ENDS IN {Mathf.CeilToInt(Mathf.Max(0f, discussion + voting - elapsed))}s";
     }
 
     private void CheckMeetingState()
@@ -118,7 +135,8 @@ public class MeetingUI : MonoBehaviour
         UpdateJudgeModeButtonText();
         PopulatePlayerList();
 
-        if (!localPlayerIsAlive)
+        discussionOver = !(GameStartManager.Instance != null && GameStartManager.Instance.DiscussionTime > 0f);
+        if (!localPlayerIsAlive || !discussionOver)
         {
             SetPlayerButtonsInteractable(false);
         }
@@ -269,7 +287,7 @@ public class MeetingUI : MonoBehaviour
     private void OnPlayerButtonClicked(ulong targetClientId, string targetName, bool isLocalPlayer)
     {
         Sfx.Play2D("click");
-        if (hasVotedThisMeeting || hasPendingTarget) return;
+        if (hasVotedThisMeeting || hasPendingTarget || !discussionOver) return;
 
         // Defense-in-depth: the local player's own button is already
         // disabled while Judge Mode is active (see ToggleJudgeMode), but
@@ -290,7 +308,7 @@ public class MeetingUI : MonoBehaviour
     private void OnSkipClicked()
     {
         Sfx.Play2D("click");
-        if (hasVotedThisMeeting || hasPendingTarget) return;
+        if (hasVotedThisMeeting || hasPendingTarget || !discussionOver) return;
 
         hasPendingTarget = true;
         pendingTargetClientId = MeetingManager.SkipVoteValue;

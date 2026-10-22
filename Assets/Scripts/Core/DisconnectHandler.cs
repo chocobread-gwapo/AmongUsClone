@@ -84,6 +84,7 @@ public class DisconnectHandler : MonoBehaviour
         if (!inMatch) yield break;
 
         MeetingManager.Instance?.ServerOnPlayerLeft(clientId);
+        TaskManager.Instance?.ServerOnPlayerLeft(clientId);
         result.CheckWinConditions();
     }
 

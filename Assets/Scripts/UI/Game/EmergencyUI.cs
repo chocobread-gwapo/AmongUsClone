@@ -24,6 +24,17 @@ public class EmergencyUI : MonoBehaviour
     private float nextScan, nextBody;
     private bool bodyNear;
 
+    // True while the local, living player stands close enough to the emergency table to use it.
+    public static bool NearTable { get; private set; }
+
+    private GameObject meetPrompt;
+    private TextMeshProUGUI meetText;
+    private CanvasGroup meetGroup;
+    private Button useButton;
+    private Image useImage;
+    private Color useBaseColor = Color.white;
+    private float nextTableScan;
+
     private const float ReportRange = 1.5f; // matches PlayerController.reportRange
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -42,7 +53,8 @@ public class EmergencyUI : MonoBehaviour
     private void OnScene()
     {
         meetingButton = null; meetingLabel = null; meetingGroup = null; meetingBase = null;
-        toast.SetActive(false); prompt.SetActive(false);
+        toast.SetActive(false); prompt.SetActive(false); meetPrompt.SetActive(false);
+        NearTable = false; useButton = null; useImage = null;
         nextScan = 0f;
     }
 
@@ -63,10 +75,13 @@ public class EmergencyUI : MonoBehaviour
         if (!inGame || nm == null || mm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null)
         {
             prompt.SetActive(false);
+            NearTable = false;
+            if (meetPrompt != null) meetPrompt.SetActive(false);
             return;
         }
 
         UpdateMeetingButton(mm);
+        UpdateTable(mm, nm.LocalClient.PlayerObject);
         UpdateBodyPrompt(nm.LocalClient.PlayerObject);
     }
 
@@ -97,17 +112,73 @@ public class EmergencyUI : MonoBehaviour
         }
         if (meetingButton == null) return;
 
+        // The on-screen Call Meeting button is replaced by the emergency table: keep it out of sight.
+        meetingGroup.alpha = 0f;
+        meetingGroup.interactable = false;
+        meetingGroup.blocksRaycasts = false;
+    }
+
+    // ------------------------------------------------------- emergency table
+
+    private void UpdateTable(MeetingManager mm, NetworkObject localPlayer)
+    {
+        var role = localPlayer.GetComponent<PlayerRole>();
+        bool blocked = role == null || !role.IsAlive
+            || mm.IsMeetingActive || TaskMiniGame.IsOpen
+            || (RoleRevealUI.Instance != null && RoleRevealUI.Instance.IsShowing)
+            || (GameResultManager.Instance != null && GameResultManager.Instance.GameEnded);
+
+        var spawns = SceneSpawnPoints.Instance;
+        NearTable = !blocked && spawns != null
+            && Vector2.Distance(localPlayer.transform.position, spawns.CenterPosition) <= spawns.EmergencyReach;
+
+        if (useButton == null && Time.unscaledTime >= nextTableScan)
+        {
+            nextTableScan = Time.unscaledTime + 1f;
+            foreach (var b in FindObjectsByType<Button>(FindObjectsInactive.Include))
+            {
+                int n = b.onClick.GetPersistentEventCount();
+                for (int i = 0; i < n; i++)
+                    if (b.onClick.GetPersistentTarget(i) is UseButton)
+                    {
+                        useButton = b;
+                        useImage = b.targetGraphic as Image;
+                        if (useImage != null) useBaseColor = useImage.color;
+                        break;
+                    }
+                if (useButton != null) break;
+            }
+        }
+
+        if (!NearTable)
+        {
+            if (meetPrompt.activeSelf) meetPrompt.SetActive(false);
+            if (useImage != null) useImage.color = useBaseColor;
+            return;
+        }
+
         int limit = mm.EmergencyCallsPerPlayer;
         int left = MeetingManager.LocalCallsLeft < 0 ? limit : MeetingManager.LocalCallsLeft;
         float cd = mm.EmergencyCooldownRemaining;
         bool usable = left > 0 && cd <= 0f;
-        meetingGroup.alpha = usable ? 1f : 0.45f;
 
-        if (meetingLabel != null && meetingBase != null)
-        {
-            string extra = left <= 0 ? "(0 left)" : cd > 0f ? "(" + Mathf.CeilToInt(cd) + "s)" : "(" + left + " left)";
-            meetingLabel.text = meetingBase + " " + extra;
-        }
+        string line = left <= 0 ? "No emergency meetings left"
+            : cd > 0f ? "Available in " + Mathf.CeilToInt(cd) + "s"
+            : "Press <color=#FFD54A>" + GameSettings.KeyFor("Interact") + "</color> or USE to call a meeting (" + left + " left)";
+        meetText.text = "EMERGENCY BUTTON\n" + line;
+        meetPrompt.SetActive(true);
+        meetGroup.alpha = usable ? 0.8f + 0.2f * Mathf.Sin(Time.unscaledTime * 6f) : 0.6f;
+
+        // Light up USE while the table can be used.
+        if (useImage != null)
+            useImage.color = usable ? Color.Lerp(useBaseColor, new Color(1f, 0.93f, 0.4f), 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 6f)) : useBaseColor;
+    }
+
+    private void OnMeetPromptClicked()
+    {
+        var p = NetworkManager.Singleton?.LocalClient?.PlayerObject;
+        if (p == null || !NearTable) return;
+        MeetingManager.Instance?.RequestCallMeetingServerRpc();
     }
 
     // ---------------------------------------------------------- body prompt
@@ -186,6 +257,15 @@ public class EmergencyUI : MonoBehaviour
         btn.targetGraphic = prompt.GetComponent<Image>();
         btn.onClick.AddListener(OnPromptClicked);
         prompt.SetActive(false);
+
+        meetPrompt = Box(cgo.transform, "MeetPrompt", new Color(0.05f, 0.4f, 0.38f, 0.95f), new Vector2(0.5f, 0f), new Vector2(0, 430), new Vector2(760, 110));
+        meetGroup = meetPrompt.AddComponent<CanvasGroup>();
+        meetText = Text(meetPrompt.transform, 28, Color.white, TextAlignmentOptions.Center);
+        Fill(meetText.rectTransform);
+        var mbtn = meetPrompt.AddComponent<Button>();
+        mbtn.targetGraphic = meetPrompt.GetComponent<Image>();
+        mbtn.onClick.AddListener(OnMeetPromptClicked);
+        meetPrompt.SetActive(false);
     }
 
     private static GameObject Box(Transform parent, string name, Color c, Vector2 anchor, Vector2 pos, Vector2 size)

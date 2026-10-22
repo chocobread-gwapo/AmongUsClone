@@ -121,7 +121,7 @@ public class HintUI : MonoBehaviour
         else
         {
             lines.Add("Press " + K("Interact") + " at a task spot to do a chore. Finish them all to win.");
-            lines.Add("Press " + K("Report") + " beside a body to call a meeting. Vote out the Maligno.");
+            lines.Add("Press " + K("Report") + " beside a body, or use the emergency table in the middle, to call a meeting. Vote out the Maligno.");
             var cls = r.CurrentSurvivorClass;
             if (cls != SurvivorClass.None)
             {
@@ -187,7 +187,7 @@ public class HintUI : MonoBehaviour
                 break;
             case "meeting":
                 title = "MEETING";
-                body = "Call everyone together to discuss who looks suspicious, then vote someone out. Each player gets a limited number of calls, and there is a cooldown after the match starts and after every meeting.";
+                body = "Stand at the emergency table in the middle and press USE to call everyone together. Each player gets a limited number of calls, and there is a cooldown after the match starts and after every meeting.";
                 break;
             default: // ability
                 title = "ABILITY" + K("Ability");

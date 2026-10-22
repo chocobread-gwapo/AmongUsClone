@@ -15,13 +15,26 @@ public class PlayerVision : NetworkBehaviour
     // own NetworkManager/PlayerObject lookups every frame.
     public static PlayerVision LocalInstance { get; private set; }
 
-    public float CurrentVisionRadius => (ghostSight ? ghostVisionRadius : baseVisionRadius * visionMultiplier.Value * transform.lossyScale.x); // world units
+    public float CurrentVisionRadius => (ghostSight ? ghostVisionRadius : baseVisionRadius * visionMultiplier.Value * RoleVision * transform.lossyScale.x); // world units
 
     [Header("Ghost")]
     [Tooltip("Vision radius (world units) for a dead local player, so ghosts can scout the map for their team.")]
     [SerializeField] private float ghostVisionRadius = 16f;
     private bool ghostSight;
     private PlayerRole role;
+
+    // Host-set Maligno / Villager vision multipliers; only applied during a match.
+    private float lastRoleVision = 1f;
+    private float RoleVision
+    {
+        get
+        {
+            var g = GameStartManager.Instance;
+            if (g == null || !g.GameStarted) return 1f;
+            if (role == null) role = GetComponent<PlayerRole>();
+            return (role != null && role.IsImpostor) ? g.MalignoVision : g.CrewVision;
+        }
+    }
 
     [Header("Vision")]
     [Tooltip("Child Light2D (Point/Freeform) that defines this player's visible radius. Only enabled for the owning client.")]
@@ -74,7 +87,7 @@ public class PlayerVision : NetworkBehaviour
         if (visionLight == null) return;
         visionLight.pointLightOuterRadius = ghostSight
             ? ghostVisionRadius / Mathf.Max(0.01f, transform.lossyScale.x)
-            : baseVisionRadius * visionMultiplier.Value;
+            : baseVisionRadius * visionMultiplier.Value * RoleVision;
     }
 
     // Server-only list of active vision reductions. The synced multiplier is
@@ -106,6 +119,8 @@ public class PlayerVision : NetworkBehaviour
             if (role == null) role = GetComponent<PlayerRole>();
             bool g = role != null && !role.IsAlive;
             if (g != ghostSight) { ghostSight = g; ApplyRadius(); }
+            float rv = RoleVision;
+            if (!Mathf.Approximately(rv, lastRoleVision)) { lastRoleVision = rv; ApplyRadius(); }
         }
 
         if (!IsServer || effects.Count == 0) return;

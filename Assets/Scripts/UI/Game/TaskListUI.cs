@@ -5,10 +5,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
 
-// Among Us-style task breakdown panel: a header bar + a per-task list like
-// "Storage: Fuel Engines (0/2)". Groups scene TaskZones by (room, task name)
-// so multiple zones that share a name (e.g. two "Fuel Engines" spots) show
-// as one combined count, matching the reference HUD.
+// Among Us-style task list: shows only the tasks given to the local player,
+// e.g. "Storage: Fuel Engines", greyed out once done.
 public class TaskListUI : MonoBehaviour
 {
     [Header("Refs")]
@@ -25,6 +23,7 @@ public class TaskListUI : MonoBehaviour
     private void OnEnable()
     {
         TaskManager.OnTaskProgressChanged += HandleProgressChanged;
+        TaskManager.OnMyTasksChanged += Refresh;
         Refresh();
     }
 
@@ -53,6 +52,7 @@ public class TaskListUI : MonoBehaviour
     private void OnDisable()
     {
         TaskManager.OnTaskProgressChanged -= HandleProgressChanged;
+        TaskManager.OnMyTasksChanged -= Refresh;
     }
 
     private void HandleProgressChanged(int completed, int total)
@@ -68,33 +68,25 @@ public class TaskListUI : MonoBehaviour
         }
         spawnedEntries.Clear();
 
-        TaskZone[] allZones = FindObjectsByType<TaskZone>(FindObjectsSortMode.None);
-
-        // Group by (room, task name) so duplicate task spots combine into one line.
-        var groups = allZones
-            .GroupBy(z => (z.RoomName, z.TaskName))
-            .OrderBy(g => g.Key.RoomName)
-            .ThenBy(g => g.Key.TaskName);
-
-        foreach (var group in groups)
+        // Only the local player's own tasks.
+        var mine = TaskManager.Instance != null ? TaskManager.Instance.MyTasks() : new List<(TaskZone zone, bool done)>();
+        mine.Sort((x, y) =>
         {
-            int total = group.Count();
-            int completed = group.Count(z => z.IsComplete);
-            bool allDone = completed >= total;
+            int c = string.CompareOrdinal(x.zone.RoomName, y.zone.RoomName);
+            return c != 0 ? c : string.CompareOrdinal(x.zone.TaskName, y.zone.TaskName);
+        });
 
-            string room = group.Key.RoomName;
-            string label = string.IsNullOrEmpty(room) ? group.Key.TaskName : $"{room}: {group.Key.TaskName}";
-            if (total > 1)
-            {
-                label += $" ({completed}/{total})";
-            }
+        foreach (var (zone, done) in mine)
+        {
+            string room = zone.RoomName;
+            string label = string.IsNullOrEmpty(room) ? zone.TaskName : $"{room}: {zone.TaskName}";
 
             GameObject entry = Instantiate(entryPrefab, listContainer);
             TextMeshProUGUI tmp = entry.GetComponentInChildren<TextMeshProUGUI>();
             if (tmp != null)
             {
                 tmp.text = label;
-                tmp.color = allDone ? completeColor : incompleteColor;
+                tmp.color = done ? completeColor : incompleteColor;
             }
             spawnedEntries.Add(entry);
         }

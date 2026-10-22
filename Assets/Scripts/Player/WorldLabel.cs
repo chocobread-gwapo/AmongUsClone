@@ -30,6 +30,8 @@ public class WorldLabel : MonoBehaviour
         ownerRole = GetComponentInParent<PlayerRole>();
     }
 
+    public TextMeshPro Text => labelText;
+
     public void SetLabel(string text)
     {
         if (labelText != null)

@@ -68,6 +68,140 @@ public class GameStartManager : NetworkBehaviour
     }
 
     // ---------------------------------------------------------------------
+    // Extended match settings (the Among Us style Game Settings panel).
+    // Everything is stored on the host and synced to everyone. The three
+    // settings above (Impostors, Kill Cooldown, Voting Time) keep their own
+    // NetworkVariables; the rest live in one NetworkList<float>, indexed by
+    // the Setting enum, so adding a setting is just one enum entry + one row
+    // in Infos.
+    // ---------------------------------------------------------------------
+
+    public enum Setting
+    {
+        Impostors, KillCooldown, MalignoVision, KillDistance,
+        PlayerSpeed, CrewVision,
+        EmergencyMeetings, EmergencyCooldown, DiscussionTime, VotingTime, AnonymousVotes, ConfirmEjects,
+        TaskBarUpdates,
+        CommonTasks, LongTasks, ShortTasks,
+        Capacity,
+    }
+
+    public class SettingInfo
+    {
+        public string label; public float min, max, step, def; public string unit = ""; public string[] options; public bool toggle;
+        public string Format(float v)
+        {
+            if (toggle) return v > 0.5f ? "On" : "Off";
+            if (options != null) return options[Mathf.Clamp(Mathf.RoundToInt(v), 0, options.Length - 1)];
+            return v.ToString("0.##") + unit;
+        }
+    }
+
+    private static readonly SettingInfo[] Infos =
+    {
+        new SettingInfo { label = "# Maligno",           min = 1,    max = 3,   step = 1,    def = 1 },
+        new SettingInfo { label = "Kill Cooldown",       min = 10,   max = 60,  step = 2.5f, def = 15,  unit = "s" },
+        new SettingInfo { label = "Maligno Vision",      min = 0.25f,max = 5,   step = 0.25f,def = 1,   unit = "x" },
+        new SettingInfo { label = "Kill Distance",       min = 0,    max = 2,   step = 1,    def = 1,   options = new[] { "Short", "Medium", "Long" } },
+        new SettingInfo { label = "Player Speed",        min = 0.5f, max = 3,   step = 0.25f,def = 1,   unit = "x" },
+        new SettingInfo { label = "Villager Vision",     min = 0.25f,max = 5,   step = 0.25f,def = 1,   unit = "x" },
+        new SettingInfo { label = "# Emergency Meetings",min = 0,    max = 9,   step = 1,    def = 1 },
+        new SettingInfo { label = "Emergency Cooldown",  min = 0,    max = 60,  step = 5,    def = 20,  unit = "s" },
+        new SettingInfo { label = "Discussion Time",     min = 0,    max = 120, step = 5,    def = 0,   unit = "s" },
+        new SettingInfo { label = "Voting Time",         min = 10,   max = 300, step = 5,    def = 30,  unit = "s" },
+        new SettingInfo { label = "Anonymous Votes",     min = 0,    max = 1,   step = 1,    def = 1,   toggle = true },
+        new SettingInfo { label = "Confirm Ejects",      min = 0,    max = 1,   step = 1,    def = 1,   toggle = true },
+        new SettingInfo { label = "Task Bar Updates",    min = 0,    max = 2,   step = 1,    def = 0,   options = new[] { "Always", "Meetings", "Never" } },
+        new SettingInfo { label = "# Common Tasks",      min = 0,    max = 2,   step = 1,    def = 1 },
+        new SettingInfo { label = "# Long Tasks",        min = 0,    max = 4,   step = 1,    def = 1 },
+        new SettingInfo { label = "# Short Tasks",       min = 0,    max = 7,   step = 1,    def = 2 },
+        new SettingInfo { label = "Capacity",            min = 4,    max = 15,  step = 1,    def = 10 },
+    };
+
+    public static SettingInfo Info(Setting s) => Infos[(int)s];
+
+    private NetworkList<float> extraSettings;
+
+    public float Get(Setting s)
+    {
+        switch (s)
+        {
+            case Setting.Impostors: return impostorCount.Value;
+            case Setting.KillCooldown: return killCooldownDuration.Value;
+            case Setting.VotingTime: return meetingDuration.Value;
+        }
+        int i = (int)s;
+        if (extraSettings == null || i >= extraSettings.Count) return Infos[i].def;
+        return extraSettings[i];
+    }
+
+    public void ServerSet(Setting s, float value)
+    {
+        if (!IsServer) return;
+        SettingInfo info = Infos[(int)s];
+        value = Mathf.Clamp(Mathf.Round(value / info.step) * info.step, info.min, info.max);
+        value = Mathf.Round(value * 100f) / 100f;
+        if (s == Setting.Capacity)
+        {
+            // Can't shrink the lobby below the players already inside it.
+            int inside = NetworkManager != null ? NetworkManager.ConnectedClientsIds.Count : 0;
+            value = Mathf.Min(info.max, Mathf.Max(value, inside));
+            MultiplayerConnectionManager.Instance?.ApplyCapacity(Mathf.RoundToInt(value));
+        }
+        switch (s)
+        {
+            case Setting.Impostors: impostorCount.Value = Mathf.RoundToInt(value); return;
+            case Setting.KillCooldown: killCooldownDuration.Value = value; return;
+            case Setting.VotingTime: meetingDuration.Value = value; return;
+        }
+        int i = (int)s;
+        if (extraSettings != null && i < extraSettings.Count && !Mathf.Approximately(extraSettings[i], value)) extraSettings[i] = value;
+    }
+
+    public float MalignoVision => Get(Setting.MalignoVision);
+    public float CrewVision => Get(Setting.CrewVision);
+    public float PlayerSpeed => Get(Setting.PlayerSpeed);
+    public int KillDistanceIndex => Mathf.RoundToInt(Get(Setting.KillDistance));
+    public float KillRangeScale => KillDistanceIndex == 0 ? 0.7f : (KillDistanceIndex == 2 ? 1.5f : 1f);
+    public int EmergencyMeetings => Mathf.RoundToInt(Get(Setting.EmergencyMeetings));
+    public float EmergencyCooldown => Get(Setting.EmergencyCooldown);
+    public float DiscussionTime => Get(Setting.DiscussionTime);
+    public bool AnonymousVotes => Get(Setting.AnonymousVotes) > 0.5f;
+    public bool ConfirmEjects => Get(Setting.ConfirmEjects) > 0.5f;
+    public int Capacity => Mathf.RoundToInt(Get(Setting.Capacity));
+    public int TaskBarMode => Mathf.RoundToInt(Get(Setting.TaskBarUpdates));
+
+    public static readonly string[] PresetNames = { "CLASSIC", "QUICK MATCH", "HARDCORE", "SOCIAL" };
+    public static readonly string[] PresetBlurbs =
+    {
+        "The standard rules.",
+        "Faster players, short meetings, quick cooldowns, no long tasks.",
+        "Sharper Maligno, dim Villagers, extra long tasks, no role reveal on eject.",
+        "Long discussions, open votes, two emergency calls.",
+    };
+
+    private static readonly (Setting s, float v)[][] PresetValues =
+    {
+        new (Setting, float)[0],
+        new[] { (Setting.KillCooldown, 10f), (Setting.EmergencyCooldown, 10f), (Setting.VotingTime, 20f), (Setting.PlayerSpeed, 1.25f), (Setting.LongTasks, 0f) },
+        new[] { (Setting.MalignoVision, 1.5f), (Setting.CrewVision, 0.75f), (Setting.KillDistance, 2f), (Setting.ConfirmEjects, 0f), (Setting.TaskBarUpdates, 1f), (Setting.LongTasks, 2f) },
+        new[] { (Setting.DiscussionTime, 30f), (Setting.VotingTime, 60f), (Setting.EmergencyMeetings, 2f), (Setting.AnonymousVotes, 0f), (Setting.TaskBarUpdates, 1f) },
+    };
+
+    public void ServerResetSettings()
+    {
+        if (!IsServer) return;
+        for (int i = 0; i < Infos.Length; i++) ServerSet((Setting)i, Infos[i].def);
+    }
+
+    public void ServerApplyPreset(int index)
+    {
+        if (!IsServer || index < 0 || index >= PresetValues.Length) return;
+        ServerResetSettings();
+        foreach (var (s, v) in PresetValues[index]) ServerSet(s, v);
+    }
+
+    // ---------------------------------------------------------------------
     // Per-role settings (Maligno sub-types + Survivor Classes): each role has
     // its own max-count cap and % chance weight. Fixed-order arrays map an
     // enum value to an index into the matching NetworkList below — same
@@ -204,6 +338,7 @@ public class GameStartManager : NetworkBehaviour
         // before the NetworkObject has spawned.
         malignoRoleSettings = new NetworkList<RoleSetting>();
         survivorRoleSettings = new NetworkList<RoleSetting>();
+        extraSettings = new NetworkList<float>();
     }
 
     public override void OnNetworkSpawn()
@@ -216,6 +351,9 @@ public class GameStartManager : NetworkBehaviour
         // receive these values via the NetworkList's own sync, not by
         // populating their own local copy.
         if (!IsServer) return;
+
+        for (int i = 0; i < Infos.Length; i++)
+            extraSettings.Add(Infos[i].def);
 
         for (int i = 0; i < AllMalignoTypes.Length; i++)
             malignoRoleSettings.Add(new RoleSetting { maxCount = 1, chancePercent = 20 });
@@ -265,6 +403,7 @@ public class GameStartManager : NetworkBehaviour
 
         SceneSpawnPoints.PlaceAllPlayers();
         AssignRoles();
+        TaskManager.Instance?.ServerAssignTasks(); // each Villager gets their own tasks
         gameStarted.Value = true;
     }
 
@@ -309,7 +448,7 @@ public class GameStartManager : NetworkBehaviour
         {
             if (i < actualImpostorCount)
             {
-                MalignoType assignedType = PickWeightedMalignoType(assignedMalignoCounts);
+                MalignoType assignedType = RollMalignoType(assignedMalignoCounts);
                 assignedMalignoCounts[assignedType] = assignedMalignoCounts.GetValueOrDefault(assignedType, 0) + 1;
 
                 allPlayers[i].ServerSetRole(Role.Impostor, assignedType);
@@ -328,16 +467,31 @@ public class GameStartManager : NetworkBehaviour
         // A crewmate whose roll lands on a class already at its cap (or if
         // every class is already full/zero-weight) just stays a plain
         // Crewmate — not every Crewmate is guaranteed a class.
-        Dictionary<SurvivorClass, int> assignedSurvivorCounts = new Dictionary<SurvivorClass, int>();
-
-        for (int i = actualImpostorCount; i < allPlayers.Count; i++)
+        // Each class's % CHANCE is an independent probability per slot (not a share of a
+        // pool): at 5% a class shows up in roughly 1 match in 20, at 100% it is guaranteed
+        // up to its # OF ROLE cap. Classes are tried in random order so none is favoured.
+        var classOrder = new List<int>();
+        for (int i = 0; i < AllSurvivorClasses.Length; i++) classOrder.Add(i);
+        for (int i = classOrder.Count - 1; i > 0; i--)
         {
-            SurvivorClass picked = PickWeightedSurvivorClass(assignedSurvivorCounts);
-            if (picked == SurvivorClass.None) continue;
+            int j = Random.Range(0, i + 1);
+            (classOrder[i], classOrder[j]) = (classOrder[j], classOrder[i]);
+        }
 
-            assignedSurvivorCounts[picked] = assignedSurvivorCounts.GetValueOrDefault(picked, 0) + 1;
-            allPlayers[i].ServerSetSurvivorClass(picked);
-            Debug.Log($"[Server] {allPlayers[i].gameObject.name} assigned Survivor Class: {picked}");
+        int nextCrew = actualImpostorCount; // allPlayers is already shuffled
+        foreach (int ci in classOrder)
+        {
+            SurvivorClass sc = AllSurvivorClasses[ci];
+            RoleSetting setting = GetSetting(survivorRoleSettings, ci);
+            if (sc == SurvivorClass.None || setting.chancePercent <= 0) continue;
+
+            for (int slot = 0; slot < setting.maxCount && nextCrew < allPlayers.Count; slot++)
+            {
+                if (Random.Range(0, 100) >= setting.chancePercent) continue;
+                allPlayers[nextCrew].ServerSetSurvivorClass(sc);
+                Debug.Log($"[Server] {allPlayers[nextCrew].gameObject.name} assigned Survivor Class: {sc}");
+                nextCrew++;
+            }
         }
 
         // Let each impostor know who their fellow impostor(s) are
@@ -351,6 +505,29 @@ public class GameStartManager : NetworkBehaviour
         }
 
         Debug.Log($"[Server] Assigned roles: {actualImpostorCount} Impostor(s) out of {allPlayers.Count} players.");
+    }
+
+    // Independent roll per Maligno type (same rule as Survivor classes): each type with room
+    // under its # OF ROLE cap passes with its % CHANCE, types tried in random order, first pass
+    // wins. If none pass the Maligno is a plain Maligno (kills, no special power).
+    private MalignoType RollMalignoType(Dictionary<MalignoType, int> assignedSoFar)
+    {
+        var order = new List<int>();
+        for (int i = 0; i < AllMalignoTypes.Length; i++) order.Add(i);
+        for (int i = order.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (order[i], order[j]) = (order[j], order[i]);
+        }
+        foreach (int i in order)
+        {
+            MalignoType type = AllMalignoTypes[i];
+            RoleSetting setting = GetSetting(malignoRoleSettings, i);
+            if (type == MalignoType.None || setting.chancePercent <= 0) continue;
+            if (assignedSoFar.GetValueOrDefault(type, 0) >= setting.maxCount) continue;
+            if (Random.Range(0, 100) < setting.chancePercent) return type;
+        }
+        return MalignoType.None;
     }
 
     // Weighted random pick among Maligno types that still have room under

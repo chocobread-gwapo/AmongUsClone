@@ -220,7 +220,7 @@ public class GameOverUI : MonoBehaviour
             case MalignoType.BalBal: return "Bal-Bal";
             case MalignoType.Aswang: return "Aswang";
             case MalignoType.Kapre: return "Kapre";
-            default: return "Unknown";
+            default: return "Maligno";
         }
     }
 

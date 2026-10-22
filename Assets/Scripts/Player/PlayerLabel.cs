@@ -54,6 +54,7 @@ public class PlayerLabel : NetworkBehaviour
             // Two-line rich-text label: bold name on top, colored "team color"
             // name below — matches the reference HUD's nametag style.
             label.SetLabel(RichLabel(OwnerClientId));
+            if (IsOwner && GetComponent<RoleTag>() == null) gameObject.AddComponent<RoleTag>();
         }
     }
 }

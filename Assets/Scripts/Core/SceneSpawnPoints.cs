@@ -12,6 +12,23 @@ public class SceneSpawnPoints : MonoBehaviour
     public static SceneSpawnPoints Instance { get; private set; }
 
     [SerializeField] private Transform center;
+    public Vector3 CenterPosition => center != null ? center.position : transform.position;
+
+    [Header("Emergency Table")]
+    [Tooltip("How close (in world units) a player must stand to the emergency table to call a meeting. The yellow circle in the Scene view (and in the Game view with Gizmos on) shows this range.")]
+    [SerializeField] private float emergencyReach = 3.8f;
+    public float EmergencyReach => emergencyReach;
+
+    private void OnDrawGizmos()
+    {
+        Vector3 c = CenterPosition;
+        Gizmos.color = new Color(1f, 0.9f, 0.1f, 1f);
+        Gizmos.DrawWireSphere(c, emergencyReach);
+        Gizmos.color = new Color(1f, 0.9f, 0.1f, 0.35f);
+        Gizmos.DrawWireSphere(c, emergencyReach * 0.98f);
+        Gizmos.color = new Color(1f, 1f, 1f, 0.5f);
+        Gizmos.DrawWireSphere(c, Mathf.Max(ringRadius, ClearRingRadius)); // where players actually spawn
+    }
     [SerializeField] private float ringRadius = 2.5f;
 
     // Furniture (e.g. the cafeteria's central table) can sit on the centre

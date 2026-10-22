@@ -47,7 +47,7 @@ public class LobbyUI : MonoBehaviour
         if (joinCodeText != null) joinCodeText.text = string.IsNullOrEmpty(code) ? "-" : code;
 
         int count = FindObjectsByType<PlayerRole>(FindObjectsSortMode.None).Length;
-        if (capacityText != null) capacityText.text = $"{count}/{maxPlayers}";
+        if (capacityText != null) capacityText.text = $"{count}/{(GameStartManager.Instance != null ? GameStartManager.Instance.Capacity : maxPlayers)}";
         if (playerCountText != null)
             playerCountText.text = count < recommendedPlayers
                 ? $"PLAYERS: {count}  ({recommendedPlayers}+ RECOMMENDED)"

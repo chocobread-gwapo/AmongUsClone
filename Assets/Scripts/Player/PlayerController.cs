@@ -27,6 +27,9 @@ public class PlayerController : NetworkBehaviour
 
     [Header("Kill Settings")]
     [SerializeField] private float killRange = 1.2f;
+    // Host-set game settings (Player Speed / Kill Distance) scale the Inspector values.
+    private float MoveSpeed => moveSpeed * (GameStartManager.Instance != null ? GameStartManager.Instance.PlayerSpeed : 1f);
+    private float KillRange => killRange * (GameStartManager.Instance != null ? GameStartManager.Instance.KillRangeScale : 1f);
     [Tooltip("Color of the kill-target outline glow (see TargetOutline.cs).")]
     [SerializeField] private Color killHighlightColor = Color.red;
 
@@ -296,7 +299,7 @@ public class PlayerController : NetworkBehaviour
         pushingAgainstObstacle = progressRatio < 0.45f;
 
         // Duwende's Nuno mound trap: slowMultiplier drops below 1 while snared.
-        Vector2 velocity = moveInput.normalized * moveSpeed * slowMultiplier.Value;
+        Vector2 velocity = moveInput.normalized * MoveSpeed * slowMultiplier.Value;
         rb.linearVelocity = velocity;
         lastAppliedVelocity = velocity;
     }
@@ -365,7 +368,7 @@ public class PlayerController : NetworkBehaviour
         if (canKillNow)
         {
             // Non-allocating overlap into a reused buffer (the old OverlapCircleAll allocated every frame).
-            int count = Physics2D.OverlapCircle(transform.position, killRange, new ContactFilter2D().NoFilter(), killHitBuffer);
+            int count = Physics2D.OverlapCircle(transform.position, KillRange, new ContactFilter2D().NoFilter(), killHitBuffer);
             for (int i = 0; i < count; i++)
             {
                 var hit = killHitBuffer[i];
@@ -405,7 +408,7 @@ public class PlayerController : NetworkBehaviour
 
     private bool HasValidKillTargetInRange()
     {
-        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, killRange);
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, KillRange);
         foreach (var hit in hits)
         {
             if (hit.gameObject == gameObject) continue;
@@ -426,6 +429,15 @@ public class PlayerController : NetworkBehaviour
         if (CurrentTaskZone != null)
         {
             CurrentTaskZone.TryComplete();
+            return;
+        }
+
+        // Standing at the emergency table: USE / the interact key calls an emergency meeting
+        // (the server enforces alive, cooldown and the per-player limit).
+        if (EmergencyUI.NearTable)
+        {
+            var role = GetComponent<PlayerRole>();
+            if (role != null && role.IsAlive) MeetingManager.Instance?.RequestCallMeetingServerRpc();
         }
     }
 
@@ -438,7 +450,7 @@ public class PlayerController : NetworkBehaviour
 
         if (Time.time < localKillCooldownEndTime) return;
 
-        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, killRange);
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, KillRange);
         foreach (var hit in hits)
         {
             if (hit.gameObject == gameObject) continue;
@@ -583,7 +595,7 @@ public class PlayerController : NetworkBehaviour
             // movement validator already tolerates (speedToleranceMultiplier),
             // not to be generous about cheating.
             float distanceToVictim = Vector2.Distance(transform.position, victimPosition);
-            float maxKillDistance = killRange * speedToleranceMultiplier;
+            float maxKillDistance = KillRange * speedToleranceMultiplier;
             if (distanceToVictim > maxKillDistance)
             {
                 Debug.LogWarning($"[Server] Rejected kill request from {gameObject.name}: " +
@@ -736,7 +748,7 @@ public class PlayerController : NetworkBehaviour
         Vector3 currentPosition = transform.position;
         float distanceMoved = Vector2.Distance(serverLastValidatedPosition, currentPosition);
 
-        float maxAllowedSpeed = moveSpeed * slowMultiplier.Value * speedToleranceMultiplier;
+        float maxAllowedSpeed = MoveSpeed * slowMultiplier.Value * speedToleranceMultiplier;
         float maxAllowedDistance = maxAllowedSpeed * elapsed;
 
         bool speedViolation = distanceMoved > maxAllowedDistance;

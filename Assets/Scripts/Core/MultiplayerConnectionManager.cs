@@ -39,7 +39,8 @@ public class MultiplayerConnectionManager : MonoBehaviour
     public static MultiplayerConnectionManager Instance { get; private set; }
 
     [Header("Session Settings")]
-    [SerializeField] private int maxPlayers = 10;
+    // Session size is always the largest; the Capacity host setting locks it earlier.
+    private const int HardMaxPlayers = 15;
 
     [Tooltip("Name of your Lobby scene (exact name, must be added in Build Settings). The host loads it the moment hosting starts — NGO's Scene Management (already enabled on your NetworkManager) automatically syncs every connected client into it too, so clients don't need to do anything extra. This is NOT the Game scene anymore — GameStartManager.HostStartGame() loads that one later, once the host presses Start.")]
     [SerializeField] private string lobbySceneName = "Lobby";
@@ -116,12 +117,14 @@ public class MultiplayerConnectionManager : MonoBehaviour
 
             var options = new SessionOptions
             {
-                MaxPlayers = maxPlayers,
+                MaxPlayers = HardMaxPlayers,
                 IsPrivate = false
             }.WithRelayNetwork();
 
             currentSession = await MultiplayerService.Instance.CreateSessionAsync(options);
             CurrentJoinCode = currentSession.Code;
+            HookLock();
+            RefreshLock();
 
             Debug.Log($"[Multiplayer] Session created. Join code: {CurrentJoinCode}");
             OnJoinCodeReady?.Invoke(CurrentJoinCode);
@@ -190,6 +193,43 @@ public class MultiplayerConnectionManager : MonoBehaviour
             OnConnectionFailed?.Invoke("Failed to create session: " + e.Message);
             return null;
         }
+    }
+
+    // Capacity (host setting): the online session is created with the largest size and then
+    // LOCKED once the lobby holds `capacity` players, so the join code stops working when full
+    // and starts working again when someone leaves or the host raises the limit.
+    private int capacity = 10;
+    private bool lockHooked;
+
+    public void ApplyCapacity(int n)
+    {
+        capacity = Mathf.Clamp(n, 1, HardMaxPlayers);
+        RefreshLock();
+    }
+
+    private void HookLock()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || lockHooked) return;
+        lockHooked = true;
+        nm.OnClientConnectedCallback += _ => RefreshLock();
+        nm.OnClientDisconnectCallback += _ => RefreshLock();
+    }
+
+    private async void RefreshLock()
+    {
+        try
+        {
+            if (currentSession == null || !currentSession.IsHost) return;
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer) return;
+            bool full = nm.ConnectedClientsIds.Count >= capacity;
+            var host = currentSession.AsHost();
+            if (host.IsLocked == full) return;
+            host.IsLocked = full;
+            await host.SavePropertiesAsync();
+        }
+        catch (Exception e) { Debug.LogWarning("[Multiplayer] Couldn't update lobby lock: " + e.Message); }
     }
 
     // ---------- Client ----------

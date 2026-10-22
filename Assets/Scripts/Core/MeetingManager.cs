@@ -35,7 +35,11 @@ public class MeetingManager : NetworkBehaviour
     private readonly Dictionary<ulong, int> emergencyCallsUsed = new Dictionary<ulong, int>();
     private bool sawGameStarted;
 
-    public int EmergencyCallsPerPlayer => emergencyCallsPerPlayer;
+    // Host-set values from the Game Settings panel win; the Inspector values are the fallback.
+    public int EmergencyCallsPerPlayer => GameStartManager.Instance != null ? GameStartManager.Instance.EmergencyMeetings : emergencyCallsPerPlayer;
+    private float EmergencyCooldownSeconds => GameStartManager.Instance != null ? GameStartManager.Instance.EmergencyCooldown : emergencyCooldown;
+    private float DiscussionSeconds => GameStartManager.Instance != null ? GameStartManager.Instance.DiscussionTime : 0f;
+    private float serverDiscussionEndsAt;
     public float EmergencyCooldownRemaining =>
         NetworkManager.Singleton == null ? 0f : Mathf.Max(0f, (float)(emergencyReadyAt.Value - NetworkManager.Singleton.ServerTime.Time));
 
@@ -50,8 +54,8 @@ public class MeetingManager : NetworkBehaviour
         if (started && !sawGameStarted)
         {
             emergencyCallsUsed.Clear();
-            emergencyReadyAt.Value = NetworkManager.ServerTime.Time + emergencyCooldown;
-            SyncCallsLeftClientRpc(emergencyCallsPerPlayer);
+            emergencyReadyAt.Value = NetworkManager.ServerTime.Time + EmergencyCooldownSeconds;
+            SyncCallsLeftClientRpc(EmergencyCallsPerPlayer);
         }
         sawGameStarted = started;
     }
@@ -85,7 +89,7 @@ public class MeetingManager : NetworkBehaviour
 
     private void ServerOnMeetingEnded()
     {
-        emergencyReadyAt.Value = NetworkManager.ServerTime.Time + emergencyCooldown;
+        emergencyReadyAt.Value = NetworkManager.ServerTime.Time + EmergencyCooldownSeconds;
     }
 
     // Server-only state — votes are tallied here, never exposed directly to clients
@@ -175,15 +179,15 @@ public class MeetingManager : NetworkBehaviour
         }
 
         emergencyCallsUsed.TryGetValue(callerId, out int used);
-        if (used >= emergencyCallsPerPlayer)
+        if (used >= EmergencyCallsPerPlayer)
         {
             EmergencyDeniedClientRpc("You have no emergency meetings left.", Only(callerId));
             return;
         }
         emergencyCallsUsed[callerId] = used + 1;
-        SyncCallsLeftClientRpc(emergencyCallsPerPlayer - (used + 1), Only(callerId));
+        SyncCallsLeftClientRpc(EmergencyCallsPerPlayer - (used + 1), Only(callerId));
 
-        Debug.Log($"[Server] Emergency meeting called by client {callerId} ({used + 1}/{emergencyCallsPerPlayer}).");
+        Debug.Log($"[Server] Emergency meeting called by client {callerId} ({used + 1}/{EmergencyCallsPerPlayer}).");
         StartMeeting();
     }
 
@@ -204,6 +208,7 @@ public class MeetingManager : NetworkBehaviour
         DeadBody.DespawnAll();
 
         serverMeetingStartTime = Time.time;
+        serverDiscussionEndsAt = Time.time + DiscussionSeconds;
 
         votes.Clear();
         isMeetingActive.Value = true;
@@ -244,7 +249,7 @@ public class MeetingManager : NetworkBehaviour
     private IEnumerator VotingTimer()
     {
         float duration = GameStartManager.Instance != null ? GameStartManager.Instance.MeetingDuration : votingDuration;
-        yield return new WaitForSeconds(duration);
+        yield return new WaitForSeconds(DiscussionSeconds + duration);
         ResolveVotes();
     }
 
@@ -258,6 +263,8 @@ public class MeetingManager : NetworkBehaviour
         // Only alive players can vote — verify server-side
         if (!TryGetPlayerRoleByClientId(voterId, out PlayerRole voterRole) || !voterRole.IsAlive)
             return;
+
+        if (Time.time < serverDiscussionEndsAt) return; // still discussing
 
         votes[voterId] = votedClientId; // votedClientId == SKIP_VOTE means they chose to skip
         Debug.Log($"[Server] Client {voterId} voted for {(votedClientId == SKIP_VOTE ? "SKIP" : votedClientId.ToString())}");
@@ -340,7 +347,7 @@ public class MeetingManager : NetworkBehaviour
         bool matchJustEnded = GameResultManager.Instance != null && GameResultManager.Instance.GameEnded;
         if (!matchJustEnded)
         {
-            AnnounceResultsClientRpc(ejectedName, ejectedWasImpostor, isTie || ejectedClientId == SKIP_VOTE);
+            AnnounceResultsClientRpc(ejectedName, ejectedWasImpostor, isTie || ejectedClientId == SKIP_VOTE, BuildVoteDetails());
         }
 
         ExtendAllCooldownsByMeetingDuration();
@@ -434,16 +441,32 @@ public class MeetingManager : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void AnnounceResultsClientRpc(string ejectedName, bool wasImpostor, bool noOneEjected)
+    private void AnnounceResultsClientRpc(string ejectedName, bool wasImpostor, bool noOneEjected, string voteDetails)
     {
         // MeetingUI listens for this via the isMeetingActive value change instead,
         // but this also fires so UI can show a specific result message.
         string message = noOneEjected
             ? "No one was exiled to the forest (tie or skipped)."
-            : $"{ejectedName} was exiled to the forest. They {(wasImpostor ? "WERE" : "were NOT")} a Maligno.";
+            : (GameStartManager.Instance == null || GameStartManager.Instance.ConfirmEjects)
+                ? $"{ejectedName} was exiled to the forest. They {(wasImpostor ? "WERE" : "were NOT")} a Maligno."
+                : $"{ejectedName} was exiled to the forest.";
+        if (!string.IsNullOrEmpty(voteDetails)) message += "\n" + voteDetails;
 
         Debug.Log($"[Client] {message}");
         MeetingUI.Instance?.ShowResult(message);
+    }
+
+    // With Anonymous Votes off, the result also says who voted for whom.
+    private string BuildVoteDetails()
+    {
+        if (GameStartManager.Instance == null || GameStartManager.Instance.AnonymousVotes || votes.Count == 0) return "";
+        var lines = new List<string>();
+        foreach (var kvp in votes)
+        {
+            string voter = PlayerLabel.DisplayName(kvp.Key);
+            lines.Add(kvp.Value == SKIP_VOTE ? $"{voter} skipped." : $"{voter} voted {PlayerLabel.DisplayName(kvp.Value)}.");
+        }
+        return string.Join("\n", lines);
     }
 
     public static ulong SkipVoteValue => SKIP_VOTE;

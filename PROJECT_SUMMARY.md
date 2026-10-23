@@ -13,17 +13,17 @@ An online multiplayer game that is playable from lobby to win screen. A host cre
 | Type | Ability | Effect |
 |---|---|---|
 | **Tikbalang** | Bewilder | Inverts a nearby Villager's controls briefly |
-| **Duwende** | Curse Trap | Hidden mound; slows and half-blinds whoever steps on it |
+| **Duwende** | Curse Trap | Mound only Maligno can see; whoever steps on it is cursed (red glow, slowed, half-blind) and dies after 20 seconds unless an Albularyo cures them |
 | **Aswang** | Shapeshift | Copies a nearby player's look and name for a short time |
 | **Kapre** | Smoke Screen | Smoke that shrinks nearby Villagers' vision |
-| **Bal-Bal** | (passive) | Kills leave no body to report |
+| **Bal-Bal** | Consume | Eats a victim so no body is left; ability cooldown is twice the kill cooldown |
 
 **Villager classes**
 | Class | Ability |
 |---|---|
-| **Third Eye** | Sees recent Maligno footprints and hidden traps nearby |
+| **Third Eye** | Sees recent Maligno footprints and reveals hidden Duwende mounds nearby |
 | **Reiki Practitioner** | Senses roughly where Maligno are |
-| **Albularyo** | Cures a cursed Villager |
+| **Albularyo** | Cures a cursed Villager before the curse kills them |
 | **Babaylan** | Condemns one player in a meeting, once per match; a wrong guess means exile |
 | **Tarot User** | Draws a card for a random buff or curse |
 
@@ -34,7 +34,8 @@ Each role's chance is an independent percentage with a cap, set by the host. A M
 - **Per-player tasks** — each Villager gets their own random common, long and short chores with mini-games; one shared progress bar counts everyone's work
 - **Meetings** — Among Us–style emergency table and body reports, optional discussion phase, open or anonymous votes, confirm-ejects option
 - **Game Settings window** — presets (Classic, Quick Match, Hardcore, Social), Maligno and Villager tuning, meeting rules, task counts, task bar mode, and per-role count and chance
-- **Fog-of-war vision** with per-player lights; labels hide outside your sight
+- **Dark fog-of-war map** with per-player vision lights; other players and nametags fade in and out at the edge of your sight
+- **Hidden Duwende mounds** with a proximity pulse sound for Villagers (louder when close), revealed by Third Eye
 - **HUD** — task list and bar, contextual USE, REPORT, ABILITY with cooldown overlay, and your own role shown under your nametag
 - **Win conditions** and a game-over screen that reveals every role; **Return to Lobby** to replay
 

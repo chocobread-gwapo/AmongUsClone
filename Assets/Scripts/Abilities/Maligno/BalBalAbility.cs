@@ -23,6 +23,11 @@ public class BalBalAbility : NetworkBehaviour
 
     private PlayerRole myRole;
 
+    // The ABILITY (consuming a body) has its own cooldown, twice as long as the kill cooldown.
+    // The consume is still a kill, so the normal kill cooldown starts too.
+    private const float AbilityCooldownFactor = 2f;
+    private float serverAbilityCdEnd = -999f;
+
     private void Awake()
     {
         myRole = GetComponent<PlayerRole>();
@@ -69,6 +74,7 @@ public class BalBalAbility : NetworkBehaviour
         // kill-cooldown clock as the normal kill button, not a separate one.
         PlayerController myController = GetComponent<PlayerController>();
         if (myController != null && myController.ServerIsKillOnCooldown()) return;
+        if (Time.time < serverAbilityCdEnd) return;
 
         if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObj))
             return;
@@ -97,11 +103,31 @@ public class BalBalAbility : NetworkBehaviour
         targetRole.ServerMarkBalBalConsumed();
         myController?.ServerStartKillCooldown();
 
+        float killCd = GameStartManager.Instance != null ? GameStartManager.Instance.KillCooldownDuration : 15f;
+        float abilityCd = killCd * AbilityCooldownFactor;
+        serverAbilityCdEnd = Time.time + abilityCd;
+        NotifyAbilityCooldownClientRpc(abilityCd);
+
         // Same Among-Us-style snap as a normal kill — Bal-bal ends up
         // standing where the victim was too.
         myController?.ServerTeleportTo(deathPosition);
 
         SpawnBananaTrunkClientRpc(deathPosition);
+    }
+
+    // Owner-only: shows the countdown on the ABILITY button.
+    [ClientRpc]
+    private void NotifyAbilityCooldownClientRpc(float duration)
+    {
+        if (!IsOwner) return;
+        AbilityCooldownUI.Instance?.StartAbilityCooldown(duration);
+    }
+
+    // Called by GameStartManager.HostReturnToLobby() so a new match starts with a ready ability.
+    public void ServerResetForNewGame()
+    {
+        if (!IsServer) return;
+        serverAbilityCdEnd = -999f;
     }
 
     [ClientRpc]

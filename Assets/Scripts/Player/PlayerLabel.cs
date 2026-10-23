@@ -55,6 +55,7 @@ public class PlayerLabel : NetworkBehaviour
             // name below — matches the reference HUD's nametag style.
             label.SetLabel(RichLabel(OwnerClientId));
             if (IsOwner && GetComponent<RoleTag>() == null) gameObject.AddComponent<RoleTag>();
+            if (!IsOwner && GetComponent<PlayerFogHide>() == null) gameObject.AddComponent<PlayerFogHide>();
         }
     }
 }

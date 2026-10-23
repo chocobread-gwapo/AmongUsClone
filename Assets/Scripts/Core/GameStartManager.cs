@@ -638,6 +638,7 @@ public class GameStartManager : NetworkBehaviour
             client.PlayerObject.GetComponent<TikbalangAbility>()?.ServerResetForNewGame();
             client.PlayerObject.GetComponent<AswangAbility>()?.ServerResetForNewGame();
             client.PlayerObject.GetComponent<KapreAbility>()?.ServerResetForNewGame();
+            client.PlayerObject.GetComponent<BalBalAbility>()?.ServerResetForNewGame();
             client.PlayerObject.GetComponent<ThirdEyeAbility>()?.ServerResetForNewGame();
             client.PlayerObject.GetComponent<ReikiAbility>()?.ServerResetForNewGame();
             client.PlayerObject.GetComponent<AlbularyoAbility>()?.ServerResetForNewGame();

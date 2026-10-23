@@ -78,14 +78,15 @@ public class ThirdEyeAbility : NetworkBehaviour
         GetComponent<PlayerVision>()?.ServerApplyVisionReduction(impairedVisionMultiplier, cooldownDuration);
 
         Vector3[] points = GatherResiduePoints().ToArray();
+        ulong[] trapIds = GatherTrapIds().ToArray();
 
         ClientRpcParams targetOnlyOwner = new ClientRpcParams
         {
             Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
         };
-        RevealResidueClientRpc(points, revealDuration, targetOnlyOwner);
+        RevealResidueClientRpc(points, trapIds, revealDuration, targetOnlyOwner);
 
-        Debug.Log($"[Server] Third Eye Sight used — revealing {points.Length} point(s).");
+        Debug.Log($"[Server] Third Eye Sight used — revealing {points.Length} footprint point(s) and {trapIds.Length} mound(s).");
     }
 
     // Server-only: gathers every living Impostor's recent footprint samples,
@@ -115,18 +116,21 @@ public class ThirdEyeAbility : NetworkBehaviour
             }
         }
 
+        return points;
+    }
+
+    // Active mounds within reach; the client then reveals the real mound objects.
+    private List<ulong> GatherTrapIds()
+    {
+        var ids = new List<ulong>();
+        float radiusSqr = revealRadius * revealRadius;
         foreach (var trap in NunoMoundTrap.ActiveTraps)
         {
-            if (trap == null) continue;
-
-            Vector3 trapPos = trap.transform.position;
-            if ((trapPos - origin).sqrMagnitude <= radiusSqr)
-            {
-                points.Add(trapPos);
-            }
+            if (trap == null || !trap.IsSpawned) continue;
+            if (((Vector3)trap.transform.position - transform.position).sqrMagnitude <= radiusSqr)
+                ids.Add(trap.NetworkObjectId);
         }
-
-        return points;
+        return ids;
     }
 
     // Targeted at this Third-Eye User's own owner only — the ability-cooldown
@@ -142,9 +146,14 @@ public class ThirdEyeAbility : NetworkBehaviour
     // Also targeted only at the owner — rpcParams restricts delivery, but the
     // IsOwner check stays as a defensive double-check like the rest of the codebase.
     [ClientRpc]
-    private void RevealResidueClientRpc(Vector3[] points, float duration, ClientRpcParams rpcParams = default)
+    private void RevealResidueClientRpc(Vector3[] points, ulong[] trapIds, float duration, ClientRpcParams rpcParams = default)
     {
         if (!IsOwner) return;
         ThirdEyeRevealUI.Instance?.ShowResidue(points, duration);
+        foreach (ulong id in trapIds)
+        {
+            if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(id, out NetworkObject no))
+                no.GetComponent<NunoMoundTrap>()?.RevealFor(duration);
+        }
     }
 }

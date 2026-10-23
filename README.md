@@ -20,8 +20,8 @@ Host a room, share the code, play a full match (tasks, meetings, kills, abilitie
 
 **Roles**
 - Server-authoritative role assignment with private reveal (each client only learns its own role)
-- **Maligno types**: Tikbalang (Bewilder), Duwende (Curse Trap), Aswang (Shapeshift), Kapre (Smoke Screen), Bal-Bal (kills leave no body)
-- **Villager classes**: Third Eye (see footprints and hidden traps), Reiki Practitioner (aura sense), Albularyo (cure curses), Babaylan (condemn one player in a meeting, once per match), Tarot User (random buff or curse)
+- **Maligno types**: Tikbalang (Bewilder), Duwende (Curse Trap), Aswang (Shapeshift), Kapre (Smoke Screen), Bal-Bal (consume a victim to leave no body; the ability's cooldown is twice the kill cooldown)
+- **Villager classes**: Third Eye (see footprints and reveal hidden Duwende mounds), Reiki Practitioner (aura sense), Albularyo (cure curses), Babaylan (condemn one player in a meeting, once per match), Tarot User (random buff or curse)
 - Role chances are **independent probabilities** per slot with a per-role cap (a 5% role appears in about 1 match in 20, 100% is guaranteed up to its cap); a Maligno that rolls no type is a plain Maligno
 - Your own role or class is shown under your nametag during a match; Maligno get no chores and see no task list
 - Dead players become ghosts: they can finish chores, cannot use abilities, stay inside the walls, and are invisible to the living
@@ -46,7 +46,9 @@ Host a room, share the code, play a full match (tasks, meetings, kills, abilitie
 - Roles tab: per-role count and % chance for every Maligno type and Villager class
 
 **Other systems**
-- Fog-of-war vision with per-player lights; labels and other players hide outside your vision
+- Much darker map with fog-of-war vision (per-player lights); other players and their nametags are only drawn inside your vision radius, fading in and out as they enter and leave it
+- **Duwende mounds** are invisible to everyone except Maligno. Villagers get a faint pulsing sound that grows louder as they get close, and Third Eye reveals the real mound for a short time
+- **Curse**: stepping on a mound curses a Villager with a red glow, slower movement and reduced vision. It does not wear off: the player dies after 20 seconds unless an Albularyo cures them
 - HUD: task bar and list, contextual USE button, REPORT, ABILITY with cooldown overlay, kill cooldown badge
 - Win/loss conditions, all server-checked: tasks complete, all Maligno ejected, or Maligno reach parity
 - Sound effects and a game-over screen with the full role reveal

@@ -32,7 +32,7 @@ public static class RoleInfo
             case SurvivorClass.ThirdEyeUser: return ("Third Eye", "See recent Maligno footprints and hidden traps nearby.");
             case SurvivorClass.ReikiPractitioner: return ("Aura Sense", "Sense roughly where Maligno are around you.");
             case SurvivorClass.Albularyo: return ("Pag-aalaga", "Cure a nearby Villager who has been cursed.");
-            case SurvivorClass.Babaylan: return ("Judge", "In a meeting, condemn one player (once per match). Guess wrong and you are exiled.");
+            case SurvivorClass.Babaylan: return ("Babaylan", "In a meeting, condemn one player (once per match). Guess wrong and you are exiled.");
             case SurvivorClass.TarotUser: return ("Sapalaran", "Draw a card for a random buff or curse. Fortune can go either way.");
             default: return ("", "");
         }

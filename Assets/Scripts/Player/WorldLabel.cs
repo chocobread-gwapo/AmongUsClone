@@ -44,9 +44,16 @@ public class WorldLabel : MonoBehaviour
         }
     }
 
+    private static readonly Color MalignoRed = new Color(1f, 0.25f, 0.25f, 1f);
+    private bool tintedRed;
+
     private void Update()
     {
         if (labelText == null) return;
+
+        // Maligno see themselves and their fellow Maligno in red (everyone else sees normal names).
+        bool red = ownerRole != null && PlayerRole.IsKnownMalignoTeammate(ownerRole.OwnerClientId);
+        if (red != tintedRed) { tintedRed = red; labelText.color = red ? MalignoRed : Color.white; }
 
         // Ghost rule first: a dead player's label is invisible to living
         // viewers no matter the distance/fog check below.

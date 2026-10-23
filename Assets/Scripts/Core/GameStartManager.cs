@@ -137,6 +137,12 @@ public class GameStartManager : NetworkBehaviour
 
     public void ServerSet(Setting s, float value)
     {
+        ServerSetNoSave(s, value);
+        SaveSettings();
+    }
+
+    private void ServerSetNoSave(Setting s, float value)
+    {
         if (!IsServer) return;
         SettingInfo info = Infos[(int)s];
         value = Mathf.Clamp(Mathf.Round(value / info.step) * info.step, info.min, info.max);
@@ -191,14 +197,16 @@ public class GameStartManager : NetworkBehaviour
     public void ServerResetSettings()
     {
         if (!IsServer) return;
-        for (int i = 0; i < Infos.Length; i++) ServerSet((Setting)i, Infos[i].def);
+        for (int i = 0; i < Infos.Length; i++) ServerSetNoSave((Setting)i, Infos[i].def);
+        SaveSettings();
     }
 
     public void ServerApplyPreset(int index)
     {
         if (!IsServer || index < 0 || index >= PresetValues.Length) return;
         ServerResetSettings();
-        foreach (var (s, v) in PresetValues[index]) ServerSet(s, v);
+        foreach (var (s, v) in PresetValues[index]) ServerSetNoSave(s, v);
+        SaveSettings();
     }
 
     // ---------------------------------------------------------------------
@@ -232,12 +240,14 @@ public class GameStartManager : NetworkBehaviour
     {
         if (!IsServer) return;
         SetMaxCount(malignoRoleSettings, IndexOf(AllMalignoTypes, type), Mathf.Clamp(value, 0, 3));
+        SaveSettings();
     }
 
     public void ServerSetMalignoChance(MalignoType type, int value)
     {
         if (!IsServer) return;
         SetChance(malignoRoleSettings, IndexOf(AllMalignoTypes, type), Mathf.Clamp(value, 0, 100));
+        SaveSettings();
     }
 
     [Header("Survivor Classes")]
@@ -262,12 +272,14 @@ public class GameStartManager : NetworkBehaviour
     {
         if (!IsServer) return;
         SetMaxCount(survivorRoleSettings, IndexOf(AllSurvivorClasses, sc), Mathf.Clamp(value, 0, 3));
+        SaveSettings();
     }
 
     public void ServerSetSurvivorChance(SurvivorClass sc, int value)
     {
         if (!IsServer) return;
         SetChance(survivorRoleSettings, IndexOf(AllSurvivorClasses, sc), Mathf.Clamp(value, 0, 100));
+        SaveSettings();
     }
 
     // ---- small helpers shared by both role families ----
@@ -360,6 +372,69 @@ public class GameStartManager : NetworkBehaviour
 
         for (int i = 0; i < AllSurvivorClasses.Length; i++)
             survivorRoleSettings.Add(new RoleSetting { maxCount = 1, chancePercent = 20 });
+
+        // One frame later: writing NetworkVariables inside OnNetworkSpawn is unreliable.
+        StartCoroutine(LoadSavedNextFrame());
+    }
+
+    private System.Collections.IEnumerator LoadSavedNextFrame()
+    {
+        yield return null;
+        if (IsServer && IsSpawned) LoadSavedSettings();
+    }
+
+    // ---- host settings persistence (PlayerPrefs on the host's computer) ----
+
+    [System.Serializable]
+    private class SavedSettings
+    {
+        public float[] extra;
+        public int[] malignoMax, malignoChance, survivorMax, survivorChance;
+    }
+
+    private const string SettingsPrefKey = "maligno.hostsettings";
+    private bool loadingSaved;
+
+    private void SaveSettings()
+    {
+        if (!IsServer || loadingSaved || extraSettings == null) return;
+        var d = new SavedSettings
+        {
+            extra = new float[extraSettings.Count],
+            malignoMax = new int[malignoRoleSettings.Count], malignoChance = new int[malignoRoleSettings.Count],
+            survivorMax = new int[survivorRoleSettings.Count], survivorChance = new int[survivorRoleSettings.Count],
+        };
+        for (int i = 0; i < d.extra.Length; i++) d.extra[i] = Get((Setting)i);
+        for (int i = 0; i < d.malignoMax.Length; i++) { d.malignoMax[i] = malignoRoleSettings[i].maxCount; d.malignoChance[i] = malignoRoleSettings[i].chancePercent; }
+        for (int i = 0; i < d.survivorMax.Length; i++) { d.survivorMax[i] = survivorRoleSettings[i].maxCount; d.survivorChance[i] = survivorRoleSettings[i].chancePercent; }
+        Debug.Log("[SaveDbg] save " + JsonUtility.ToJson(d));
+        PlayerPrefs.SetString(SettingsPrefKey, JsonUtility.ToJson(d));
+        PlayerPrefs.Save();
+    }
+
+    private void LoadSavedSettings()
+    {
+        string json = PlayerPrefs.GetString(SettingsPrefKey, "");
+        if (string.IsNullOrEmpty(json)) return;
+        SavedSettings d = null;
+        try { d = JsonUtility.FromJson<SavedSettings>(json); } catch { }
+        if (d == null) return;
+        Debug.Log("[SaveDbg] load " + json + " kc=" + killCooldownDuration.Value);
+
+        loadingSaved = true;
+        if (d.extra != null)
+            for (int i = 0; i < d.extra.Length && i < Infos.Length; i++) ServerSetNoSave((Setting)i, d.extra[i]);
+        LoadRoleList(malignoRoleSettings, d.malignoMax, d.malignoChance);
+        LoadRoleList(survivorRoleSettings, d.survivorMax, d.survivorChance);
+        Debug.Log("[SaveDbg] after kc=" + killCooldownDuration.Value);
+        loadingSaved = false;
+    }
+
+    private static void LoadRoleList(NetworkList<RoleSetting> list, int[] max, int[] chance)
+    {
+        if (max == null || chance == null) return;
+        for (int i = 0; i < list.Count && i < max.Length && i < chance.Length; i++)
+            list[i] = new RoleSetting { maxCount = Mathf.Clamp(max[i], 0, 3), chancePercent = Mathf.Clamp(chance[i], 0, 100) };
     }
 
     public void HostStartGame()
@@ -461,6 +536,11 @@ public class GameStartManager : NetworkBehaviour
                 allPlayers[i].ServerSetRole(Role.Crewmate, MalignoType.None);
             }
         }
+
+        // Tell each Maligno who the other Maligno are (so their nametags show red to each other only).
+        ulong[] malignoIds = impostorClientIds.ToArray();
+        for (int i = 0; i < actualImpostorCount && i < allPlayers.Count; i++)
+            allPlayers[i].ServerSendMalignoTeam(malignoIds);
 
         // Crewmates left after Impostors are picked each get an independent
         // weighted roll for a Survivor Class, bounded by each class's cap.

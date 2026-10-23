@@ -70,6 +70,7 @@ public class MeetingUI : MonoBehaviour
     private void Update()
     {
         if (votingPanel == null || !votingPanel.activeSelf) return;
+        foreach (var id in new List<ulong>(voteBadges.Keys)) RefreshBadge(id);
         var g = GameStartManager.Instance;
         float discussion = g != null ? g.DiscussionTime : 0f;
         float voting = g != null ? g.MeetingDuration : 30f;
@@ -179,8 +180,8 @@ public class MeetingUI : MonoBehaviour
     {
         if (judgeModeButtonText == null) return;
         judgeModeButtonText.text = judgeModeActive
-            ? "JUDGE MODE: ON (pick a player to condemn)"
-            : "Use Judge Skill";
+            ? "BABAYLAN MODE: ON (pick a player to condemn)"
+            : "Use Babaylan Skill";
     }
 
     private void CloseVotingPanel()
@@ -225,7 +226,7 @@ public class MeetingUI : MonoBehaviour
             if (client.PlayerObject == null) continue;
 
             PlayerRole player = client.PlayerObject.GetComponent<PlayerRole>();
-            if (player == null || !player.IsAlive) continue; // dead players aren't votable, and can't vote (enforced server-side too)
+            if (player == null || !player.IsAlive) continue; // dead players are listed after the living ones (below), greyed out
 
             GameObject btnObj = Instantiate(voteButtonPrefab, playerListContainer);
             spawnedButtons.Add(btnObj);
@@ -235,6 +236,8 @@ public class MeetingUI : MonoBehaviour
 
             ulong targetClientId = player.OwnerClientId;
             string targetName = PlayerLabel.DisplayName(player.OwnerClientId);
+            AddPortrait(btnObj, player, false);
+            AddVoteBadge(btnObj, targetClientId);
 
             bool isLocalPlayer = targetClientId == NetworkManager.Singleton.LocalClientId;
             if (isLocalPlayer)
@@ -248,6 +251,21 @@ public class MeetingUI : MonoBehaviour
             {
                 btn.onClick.AddListener(() => OnPlayerButtonClicked(targetClientId, targetName, isLocalPlayer));
             }
+        }
+
+        // Dead players: shown greyed out with a red X, not votable (the server rejects votes for / from the dead anyway).
+        foreach (var client in NetworkManager.Singleton.ConnectedClientsList)
+        {
+            if (client.PlayerObject == null) continue;
+            PlayerRole deadPlayer = client.PlayerObject.GetComponent<PlayerRole>();
+            if (deadPlayer == null || deadPlayer.IsAlive) continue;
+
+            GameObject deadObj = Instantiate(voteButtonPrefab, playerListContainer);
+            spawnedButtons.Add(deadObj);
+            deadButtons.Add(deadObj);
+            MarkAsDead(deadObj, PlayerLabel.DisplayName(deadPlayer.OwnerClientId)
+                + (deadPlayer.OwnerClientId == NetworkManager.Singleton.LocalClientId ? " (You)" : ""));
+            AddPortrait(deadObj, deadPlayer, true);
         }
 
         // Add a Skip button
@@ -271,8 +289,138 @@ public class MeetingUI : MonoBehaviour
         }
     }
 
+    private readonly List<GameObject> deadButtons = new List<GameObject>();
+
+    // ---------- portraits + "voted" badges ----------
+
+    private const float PortraitBox = 56f;
+
+    // The player's character (head and shoulders), on the left of their entry, like Among Us.
+    private void AddPortrait(GameObject entry, PlayerRole player, bool dead)
+    {
+        Sprite sprite = null;
+        var anim = player.GetComponent<CharacterSpriteAnimator>();
+        if (anim != null) sprite = anim.GetPortraitSprite();
+        if (sprite == null) { var sr = player.GetComponent<SpriteRenderer>(); if (sr != null) sprite = sr.sprite; }
+
+        var box = new GameObject("Portrait", typeof(RectTransform), typeof(RectMask2D));
+        var brt = (RectTransform)box.transform;
+        brt.SetParent(entry.transform, false);
+        brt.anchorMin = brt.anchorMax = new Vector2(0f, 0.5f);
+        brt.pivot = new Vector2(0f, 0.5f);
+        brt.anchoredPosition = new Vector2(10f, 0f);
+        brt.sizeDelta = new Vector2(PortraitBox, PortraitBox);
+
+        if (sprite != null)
+        {
+            var imgGo = new GameObject("Character", typeof(RectTransform), typeof(Image));
+            var irt = (RectTransform)imgGo.transform;
+            irt.SetParent(brt, false);
+            float h = PortraitBox * 2.1f; // oversized and clipped from the bottom, so only head and shoulders show
+            float w = h * sprite.rect.width / sprite.rect.height;
+            irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 1f);
+            irt.pivot = new Vector2(0.5f, 1f);
+            irt.anchoredPosition = new Vector2(0f, -3f);
+            irt.sizeDelta = new Vector2(w, h);
+            var img = imgGo.GetComponent<Image>();
+            img.sprite = sprite;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            if (dead) img.color = new Color(0.55f, 0.55f, 0.6f, 1f);
+            var lookLabel = player.GetComponent<PlayerLabel>();
+            if (lookLabel != null) LookPortrait.Attach(img, lookLabel.NetworkLook, dead ? new Color(0.55f, 0.55f, 0.6f, 1f) : Color.white);
+        }
+
+        // Make room for the portrait: push the name to the right.
+        TextMeshProUGUI label = entry.GetComponentInChildren<TextMeshProUGUI>();
+        if (label != null) { var mg = label.margin; mg.x = PortraitBox + 24f; label.margin = mg; }
+
+        // The red X (dead entries) must draw on top of the portrait.
+        var x = entry.transform.Find("DeadX");
+        if (x != null) x.SetAsLastSibling();
+    }
+
+    private readonly Dictionary<ulong, (Image pill, TextMeshProUGUI text)> voteBadges =
+        new Dictionary<ulong, (Image, TextMeshProUGUI)>();
+
+    // Small pill on the right of a living player's entry: "VOTED" (green) or "..." (grey).
+    private void AddVoteBadge(GameObject entry, ulong clientId)
+    {
+        var pillGo = new GameObject("VoteBadge", typeof(RectTransform), typeof(Image));
+        var prt = (RectTransform)pillGo.transform;
+        prt.SetParent(entry.transform, false);
+        prt.anchorMin = prt.anchorMax = new Vector2(1f, 0.5f);
+        prt.pivot = new Vector2(1f, 0.5f);
+        prt.anchoredPosition = new Vector2(-14f, 0f);
+        prt.sizeDelta = new Vector2(150f, 34f);
+        var pill = pillGo.GetComponent<Image>();
+        pill.raycastTarget = false;
+
+        var txtGo = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        var trt = (RectTransform)txtGo.transform;
+        trt.SetParent(prt, false);
+        trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = trt.offsetMax = Vector2.zero;
+        var tmp = txtGo.GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI src = entry.GetComponentInChildren<TextMeshProUGUI>();
+        if (src != null) { tmp.font = src.font; tmp.fontSharedMaterial = src.fontSharedMaterial; }
+        tmp.fontSize = 22; tmp.alignment = TextAlignmentOptions.Center; tmp.raycastTarget = false;
+
+        voteBadges[clientId] = (pill, tmp);
+        RefreshBadge(clientId);
+    }
+
+    private void RefreshBadge(ulong clientId)
+    {
+        if (!voteBadges.TryGetValue(clientId, out var b) || b.pill == null) return;
+        bool voted = MeetingManager.Instance != null && MeetingManager.Instance.HasVoted(clientId);
+        b.pill.color = voted ? new Color(0.16f, 0.62f, 0.3f, 1f) : new Color(0.12f, 0.16f, 0.19f, 0.9f);
+        b.text.text = voted ? "VOTED" : "WAITING";
+        b.text.color = voted ? Color.white : new Color(0.65f, 0.7f, 0.74f, 1f);
+    }
+
+    // Greys an entry out, strikes its name through and stamps a red X over it.
+    private void MarkAsDead(GameObject entry, string name)
+    {
+        Button b = entry.GetComponent<Button>();
+        if (b != null) b.interactable = false;
+
+        foreach (var img in entry.GetComponentsInChildren<Image>(true))
+            img.color = new Color(img.color.r * 0.45f, img.color.g * 0.45f, img.color.b * 0.45f, img.color.a);
+
+        TextMeshProUGUI label = entry.GetComponentInChildren<TextMeshProUGUI>();
+        if (label != null)
+        {
+            label.text = name;
+            label.color = new Color(0.65f, 0.65f, 0.65f, 1f);
+            label.fontStyle |= FontStyles.Strikethrough;
+        }
+
+        // Red X: two thin bars rotated +-45 degrees, on the left side of the entry.
+        var holder = new GameObject("DeadX", typeof(RectTransform));
+        var hrt = (RectTransform)holder.transform;
+        hrt.SetParent(entry.transform, false);
+        hrt.anchorMin = hrt.anchorMax = new Vector2(0f, 0.5f);
+        hrt.pivot = new Vector2(0.5f, 0.5f);
+        hrt.anchoredPosition = new Vector2(38f, 0f);
+        hrt.sizeDelta = new Vector2(44f, 44f);
+        for (int i = 0; i < 2; i++)
+        {
+            var bar = new GameObject("Bar", typeof(RectTransform), typeof(Image));
+            var brt = (RectTransform)bar.transform;
+            brt.SetParent(hrt, false);
+            brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.5f);
+            brt.sizeDelta = new Vector2(58f, 8f);
+            brt.localRotation = Quaternion.Euler(0, 0, i == 0 ? 45f : -45f);
+            var bi = bar.GetComponent<Image>();
+            bi.color = new Color(0.9f, 0.12f, 0.12f, 1f);
+            bi.raycastTarget = false;
+        }
+    }
+
     private void ClearPlayerList()
     {
+        deadButtons.Clear();
+        voteBadges.Clear();
         foreach (var btn in spawnedButtons)
         {
             if (btn != null) Destroy(btn);
@@ -326,7 +474,7 @@ public class MeetingUI : MonoBehaviour
         if (confirmationText != null)
         {
             confirmationText.text = pendingIsJudge
-                ? $"Use Judge Skill on {pendingTargetName}?\nIf wrong, YOU will be banished instead."
+                ? $"Use Babaylan Skill on {pendingTargetName}?\nIf wrong, YOU will be banished instead."
                 : pendingTargetClientId == MeetingManager.SkipVoteValue
                     ? "Skip voting this meeting?"
                     : $"Vote to eject {pendingTargetName}?";
@@ -372,6 +520,7 @@ public class MeetingUI : MonoBehaviour
     {
         foreach (var btn in spawnedButtons)
         {
+            if (btn == null || deadButtons.Contains(btn)) continue; // the dead stay greyed out
             Button b = btn.GetComponent<Button>();
             if (b != null) b.interactable = interactable;
         }

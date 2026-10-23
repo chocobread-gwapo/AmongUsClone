@@ -75,6 +75,30 @@ public class PlayerRole : NetworkBehaviour
         isAlive.OnValueChanged -= HandleAliveChanged;
     }
 
+    // ---- Maligno team: Maligno know who their fellow Maligno are (their names show red to each other only) ----
+    private static readonly System.Collections.Generic.HashSet<ulong> malignoTeam = new System.Collections.Generic.HashSet<ulong>();
+
+    // True on a Maligno's own client for itself and each fellow Maligno; always false for everyone else.
+    public static bool IsKnownMalignoTeammate(ulong clientId) => malignoTeam.Contains(clientId);
+
+    // Server -> this player's owner only: the full list of Maligno client ids (empty to clear).
+    public void ServerSendMalignoTeam(ulong[] impostorClientIds)
+    {
+        if (!IsServer) return;
+        ClientRpcParams onlyOwner = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { OwnerClientId } }
+        };
+        ReceiveMalignoTeamClientRpc(impostorClientIds, onlyOwner);
+    }
+
+    [ClientRpc]
+    private void ReceiveMalignoTeamClientRpc(ulong[] impostorClientIds, ClientRpcParams rpcParams = default)
+    {
+        malignoTeam.Clear();
+        foreach (var id in impostorClientIds) malignoTeam.Add(id);
+    }
+
     public void ServerSetRole(Role role, MalignoType malignoType = MalignoType.None)
     {
         if (!IsServer) return;
@@ -233,6 +257,7 @@ public class PlayerRole : NetworkBehaviour
         };
         ReceiveRoleClientRpc(Role.Crewmate, MalignoType.None, false, targetOnlyOwner);
         ReceiveSurvivorClassClientRpc(SurvivorClass.None, false, targetOnlyOwner);
+        ReceiveMalignoTeamClientRpc(new ulong[0], targetOnlyOwner);
     }
 
     // Ghost/Spirit state: a dead player keeps moving and can still finish

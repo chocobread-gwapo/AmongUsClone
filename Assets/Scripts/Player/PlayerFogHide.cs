@@ -22,6 +22,7 @@ public class PlayerFogHide : MonoBehaviour
     [SerializeField] private float fadeOutTime = 0.5f;
 
     private Renderer[] renderers;
+    private readonly HashSet<Renderer> hiddenByMe = new HashSet<Renderer>();
     private SpriteRenderer mainSprite;
     private readonly Dictionary<SpriteRenderer, float> baseAlpha = new Dictionary<SpriteRenderer, float>();
     private float nextRefresh;
@@ -51,7 +52,19 @@ public class PlayerFogHide : MonoBehaviour
         foreach (var r in renderers)
         {
             if (r == null || r.GetComponent<TMP_Text>() != null) continue;
-            if (r.enabled != visible) r.enabled = visible;
+            // TargetOutline manages its own copies (they are off unless a target is highlighted).
+            if (r.gameObject.name.StartsWith("OutlineGhost")) continue;
+            // PlayerLookRenderer mirrors the main sprite (fade included) for the clothing layers.
+            if (r.gameObject.name.StartsWith(PlayerLookRenderer.LayerPrefix)) continue;
+
+            if (!visible)
+            {
+                if (r.enabled) { r.enabled = false; hiddenByMe.Add(r); }
+            }
+            else if (hiddenByMe.Remove(r))
+            {
+                r.enabled = true; // only re-enable what we switched off ourselves
+            }
 
             var sr = r as SpriteRenderer;
             if (sr == null) continue;

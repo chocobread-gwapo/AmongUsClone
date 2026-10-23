@@ -309,7 +309,7 @@ public class PlayerController : NetworkBehaviour
     {
         bool meetingActive = MeetingManager.Instance != null && MeetingManager.Instance.IsMeetingActive;
         bool gameOver = GameResultManager.Instance != null && GameResultManager.Instance.GameEnded;
-        return meetingActive || gameOver || TaskMiniGame.IsOpen;
+        return meetingActive || gameOver || TaskMiniGame.IsOpen || EmergencyUI.PopupOpen || LookCustomizerUI.PanelOpen;
     }
 
     private void OnInteract(InputAction.CallbackContext context) => TryInteract();
@@ -437,7 +437,7 @@ public class PlayerController : NetworkBehaviour
         if (EmergencyUI.NearTable)
         {
             var role = GetComponent<PlayerRole>();
-            if (role != null && role.IsAlive) MeetingManager.Instance?.RequestCallMeetingServerRpc();
+            if (role != null && role.IsAlive) EmergencyUI.OpenPopup(); // the pop-up has the big red button
         }
     }
 

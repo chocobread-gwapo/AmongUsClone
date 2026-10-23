@@ -62,6 +62,24 @@ public class RoleRevealUI : MonoBehaviour
         if (root != null) root.SetActive(false);
     }
 
+    // The role arrives while the match scene is still spawning the player, so wait for the local
+    // player's look to exist, then dress the portrait in it.
+    private IEnumerator AttachLookWhenReady()
+    {
+        for (int i = 0; i < 40; i++)
+        {
+            foreach (var label in FindObjectsByType<PlayerLabel>(FindObjectsSortMode.None))
+            {
+                if (label.IsOwner && label.IsSpawned && label.NetworkLookPacked >= 0)
+                {
+                    LookPortrait.Attach(portraitImage, label.NetworkLook, Color.white);
+                    yield break;
+                }
+            }
+            yield return new WaitForSeconds(0.15f);
+        }
+    }
+
     // Called from PlayerRole's role reveal. isImpostor/malignoType come
     // straight from the enum values — all the display text/color lookup
     // happens in here so flavor text only lives in one place. portrait is
@@ -80,6 +98,7 @@ public class RoleRevealUI : MonoBehaviour
         {
             portraitImage.sprite = portrait;
             portraitImage.enabled = portrait != null;
+            if (portrait != null) StartCoroutine(AttachLookWhenReady());
         }
 
         if (isImpostor)
@@ -183,7 +202,7 @@ public class RoleRevealUI : MonoBehaviour
             case SurvivorClass.Albularyo:
                 return ("Pag-aalaga", "Cure a nearby cursed Villager.");
             case SurvivorClass.Babaylan:
-                return ("Judge", "Condemn a player: guess wrong, you're exiled.");
+                return ("Babaylan", "Condemn a player: guess wrong, you're exiled.");
             case SurvivorClass.TarotUser:
                 return ("Sapalaran", "Draw a card for a random buff or curse.");
             default:

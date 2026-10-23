@@ -30,6 +30,23 @@ public class DeadBody : NetworkBehaviour
 
     public ulong OriginalPlayerId => originalPlayerId.Value;
 
+    // Dead player's packed look (colour/shirt/pants/hat), so the corpse is dressed.
+    private readonly NetworkVariable<int> lookPacked = new NetworkVariable<int>(
+        -1,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    private DeadBodyLook bodyLook;
+
+    public override void OnNetworkSpawn()
+    {
+        bodyLook = gameObject.GetComponent<DeadBodyLook>();
+        if (bodyLook == null) bodyLook = gameObject.AddComponent<DeadBodyLook>();
+        lookPacked.OnValueChanged += (_, v) => bodyLook.Apply(v);
+        bodyLook.Apply(lookPacked.Value);
+    }
+
     // Called by PlayerRole.Kill() right after this object's own Spawn()
     // call returns (Spawn() is synchronous on the server, so the object is
     // already fully spawned by the time this runs — writing here is safe;
@@ -39,6 +56,11 @@ public class DeadBody : NetworkBehaviour
     {
         if (!IsServer) return;
         originalPlayerId.Value = deadPlayerNetworkObjectId;
+        if (NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(deadPlayerNetworkObjectId, out var obj))
+        {
+            var label = obj.GetComponent<PlayerLabel>();
+            if (label != null) lookPacked.Value = label.NetworkLookPacked;
+        }
     }
 
     // Server-only: removes every DeadBody currently on the map. Lives here

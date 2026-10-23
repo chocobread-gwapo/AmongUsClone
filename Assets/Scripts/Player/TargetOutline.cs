@@ -79,9 +79,14 @@ public class TargetOutline : MonoBehaviour
     {
         if (!isHighlighted || sourceRenderer == null) return;
 
+        // If the real sprite isn't visible to this viewer (a ghost seen by the living, or a player
+        // hidden by fog-of-war), the outline copies must not show either, or they'd draw a solid silhouette.
+        bool sourceVisible = sourceRenderer.enabled && sourceRenderer.color.a > 0.05f;
+
         foreach (var ghost in ghosts)
         {
             if (ghost == null) continue;
+            if (ghost.enabled != sourceVisible) ghost.enabled = sourceVisible;
             ghost.sprite = sourceRenderer.sprite;
             ghost.flipX = sourceRenderer.flipX;
             ghost.flipY = sourceRenderer.flipY;

@@ -231,6 +231,7 @@ public class HintUI : MonoBehaviour
         // Goal strip (top centre).
         goalPill = Box(cgo.transform, "Goal", new Color(0.03f, 0.06f, 0.08f, 0.82f), new Vector2(0.5f, 1f), new Vector2(0, -16), new Vector2(1100, 46));
         goalText = Text(goalPill.transform, 24, Color.white, TextAlignmentOptions.Center);
+        goalText.enableAutoSizing = true; goalText.fontSizeMin = 14; goalText.fontSizeMax = 24;
         Stretch((RectTransform)goalText.transform);
         goalPill.SetActive(false);
 

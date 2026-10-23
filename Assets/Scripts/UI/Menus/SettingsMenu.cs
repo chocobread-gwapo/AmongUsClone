@@ -16,6 +16,9 @@ public class SettingsMenu : MonoBehaviour
     private static SettingsMenu instance;
 
     private GameObject canvasGo, panel, gearButton;
+    private Button quitButton;
+    private TextMeshProUGUI quitLabel;
+    private bool quitArmed, leaving;
     private Action onClosed;
     private bool built;
     private TextMeshProUGUI fullscreenLabel, hintsLabel;
@@ -96,6 +99,30 @@ public class SettingsMenu : MonoBehaviour
         RefreshAll();
         canvasGo.SetActive(true);
         panel.SetActive(true);
+        quitArmed = false;
+        if (quitButton != null)
+        {
+            quitButton.gameObject.SetActive(!IsMainMenu());
+            quitLabel.text = "QUIT TO MENU";
+        }
+    }
+
+    // Leaves the match/lobby (the host leaving hands the group to a new host) and returns to the main menu.
+    private async void OnQuitToMenu()
+    {
+        if (leaving) return;
+        if (!quitArmed)
+        {
+            quitArmed = true;
+            quitLabel.text = "CLICK AGAIN TO CONFIRM";
+            return;
+        }
+        leaving = true;
+        Close();
+        if (MultiplayerConnectionManager.Instance != null)
+            await MultiplayerConnectionManager.Instance.LeaveSessionAsync();
+        SceneManager.LoadScene("MainMenu");
+        leaving = false;
     }
 
     public void Close()
@@ -334,6 +361,10 @@ public class SettingsMenu : MonoBehaviour
             GameSettings.ResetAudio(); GameSettings.ResetBindings(asset);
             RefreshAll();
         });
+        quitButton = MakeButton(bottom.transform, "QUIT TO MENU", 26, new Color(0.6f, 0.2f, 0.2f), 400, 56);
+        quitLabel = quitButton.GetComponentInChildren<TextMeshProUGUI>();
+        quitButton.onClick.AddListener(OnQuitToMenu);
+        quitButton.gameObject.SetActive(!IsMainMenu());
         var close = MakeButton(bottom.transform, "CLOSE", 26, new Color(0.15f, 0.55f, 0.5f), 260, 56);
         close.onClick.AddListener(Close);
 

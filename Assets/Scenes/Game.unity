@@ -518,7 +518,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 30, y: -30}
+  m_AnchoredPosition: {x: 30, y: -90}
   m_SizeDelta: {x: 540, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!1 &43526314
@@ -3752,7 +3752,7 @@ MonoBehaviour:
     rid: 2786298205217489049
   m_FalloffIntensity: 0.5
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 0.1
+  m_Intensity: 0.03
   m_LightVolumeIntensity: 1
   m_LightVolumeEnabled: 0
   m_ApplyToSortingLayers: 00000000i
@@ -8840,7 +8840,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: JUDGE MODE
+  m_text: BABAYLAN MODE
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: a8382491be2e0424ebf2fdf610859447, type: 2}
   m_sharedMaterial: {fileID: -7904631154091489536, guid: a8382491be2e0424ebf2fdf610859447, type: 2}

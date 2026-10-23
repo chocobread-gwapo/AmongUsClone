@@ -72,6 +72,7 @@ public class AswangAbility : NetworkBehaviour
         serverCooldownEndTime = -999f;
         disguiseActive.Value = false;
         disguiseLabel.Value = "";
+        GetComponent<PlayerLabel>()?.ServerSetDisguiseLook(-1);
     }
 
     public void ServerExtendCooldownIfActive(float seconds)
@@ -124,6 +125,9 @@ public class AswangAbility : NetworkBehaviour
 
         disguiseLabel.Value = targetName;
         disguiseColor.Value = targetSprite != null ? targetSprite.color : Color.white;
+        // Wear the target's clothes too, so the disguise matches the name tag.
+        PlayerLabel targetLabel = targetObj.GetComponent<PlayerLabel>();
+        GetComponent<PlayerLabel>()?.ServerSetDisguiseLook(targetLabel != null ? targetLabel.NetworkLookPacked : -1);
         disguiseActive.Value = true;
 
         StartCoroutine(RevertAfter(disguiseDuration));

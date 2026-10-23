@@ -22,6 +22,23 @@ public class MeetingManager : NetworkBehaviour
 
     public bool IsMeetingActive => isMeetingActive.Value;
 
+    // Who has already voted this meeting (NOT who they voted for), so every client can show a
+    // "voted / waiting" badge next to each player. Kept in step with the server-only votes dictionary.
+    private readonly NetworkList<ulong> votedClients = new NetworkList<ulong>(
+        null, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    public bool HasVoted(ulong clientId) => votedClients.Contains(clientId);
+
+    private void SyncVoted()
+    {
+        if (!IsServer) return;
+        bool same = votedClients.Count == votes.Count;
+        if (same) foreach (var id in votes.Keys) if (!votedClients.Contains(id)) { same = false; break; }
+        if (same) return;
+        votedClients.Clear();
+        foreach (var id in votes.Keys) votedClients.Add(id);
+    }
+
     [Header("Emergency Meeting Rules")]
     [Tooltip("How many emergency meetings each player may call per match (body reports are unlimited).")]
     [SerializeField] private int emergencyCallsPerPlayer = 1;
@@ -82,7 +99,7 @@ public class MeetingManager : NetworkBehaviour
     public void ServerOnPlayerLeft(ulong clientId)
     {
         if (!IsServer) return;
-        votes.Remove(clientId);
+        votes.Remove(clientId); SyncVoted();
         emergencyCallsUsed.Remove(clientId);
         if (isMeetingActive.Value && AllAlivePlayersHaveVoted()) ResolveVotes();
     }
@@ -210,7 +227,7 @@ public class MeetingManager : NetworkBehaviour
         serverMeetingStartTime = Time.time;
         serverDiscussionEndsAt = Time.time + DiscussionSeconds;
 
-        votes.Clear();
+        votes.Clear(); SyncVoted();
         isMeetingActive.Value = true;
 
         if (votingCoroutine != null) StopCoroutine(votingCoroutine);
@@ -267,6 +284,7 @@ public class MeetingManager : NetworkBehaviour
         if (Time.time < serverDiscussionEndsAt) return; // still discussing
 
         votes[voterId] = votedClientId; // votedClientId == SKIP_VOTE means they chose to skip
+        SyncVoted();
         Debug.Log($"[Server] Client {voterId} voted for {(votedClientId == SKIP_VOTE ? "SKIP" : votedClientId.ToString())}");
 
         if (AllAlivePlayersHaveVoted())
@@ -352,7 +370,7 @@ public class MeetingManager : NetworkBehaviour
 
         ExtendAllCooldownsByMeetingDuration();
         ServerOnMeetingEnded();
-        votes.Clear();
+        votes.Clear(); SyncVoted();
         isMeetingActive.Value = false;
     }
 
@@ -375,7 +393,7 @@ public class MeetingManager : NetworkBehaviour
         {
             // Shouldn't happen (BabaylanAbility already validated the caller),
             // but bail out cleanly rather than leaving the meeting stuck.
-            votes.Clear();
+            votes.Clear(); SyncVoted();
             isMeetingActive.Value = false;
             return;
         }
@@ -411,7 +429,7 @@ public class MeetingManager : NetworkBehaviour
 
         ExtendAllCooldownsByMeetingDuration();
         ServerOnMeetingEnded();
-        votes.Clear();
+        votes.Clear(); SyncVoted();
         isMeetingActive.Value = false;
     }
 
@@ -419,8 +437,8 @@ public class MeetingManager : NetworkBehaviour
     private void AnnounceJudgmentResultClientRpc(string judgeName, string targetName, bool guessWasCorrect, string banishedName)
     {
         string message = guessWasCorrect
-            ? $"{judgeName} invoked Judge Skill on {targetName}: correct! {banishedName} was a Maligno and has been exiled to the forest."
-            : $"{judgeName} invoked Judge Skill on {targetName}: WRONG. {banishedName} the Babaylan has been exiled to the forest instead.";
+            ? $"{judgeName} used the Babaylan's judgment on {targetName}: correct! {banishedName} was a Maligno and has been exiled to the forest."
+            : $"{judgeName} used the Babaylan's judgment on {targetName}: WRONG. {banishedName} the Babaylan has been exiled to the forest instead.";
 
         Debug.Log($"[Client] {message}");
         MeetingUI.Instance?.ShowResult(message);

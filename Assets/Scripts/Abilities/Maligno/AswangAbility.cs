@@ -118,7 +118,7 @@ public class AswangAbility : NetworkBehaviour
         if (targetRole == null || !targetRole.IsAlive) return;
 
         SpriteRenderer targetSprite = targetObj.GetComponent<SpriteRenderer>();
-        string targetName = $"Player {targetObj.OwnerClientId + 1}";
+        string targetName = PlayerLabel.RichLabel(targetObj.OwnerClientId);
 
         serverCooldownEndTime = Time.time + cooldownDuration;
         NotifyCooldownStartedClientRpc(cooldownDuration);
@@ -163,7 +163,7 @@ public class AswangAbility : NetworkBehaviour
 
         if (worldLabel != null)
         {
-            worldLabel.SetLabel(disguiseActive.Value ? disguiseLabel.Value.ToString() : $"Player {OwnerClientId + 1}");
+            worldLabel.SetLabel(disguiseActive.Value ? disguiseLabel.Value.ToString() : PlayerLabel.RichLabel(OwnerClientId));
         }
 
         // TODO: spawn a reversed-footprint particle trail while disguiseActive.Value

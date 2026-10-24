@@ -34,7 +34,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 2.1}
+  m_AnchoredPosition: {x: 0, y: 1.6}
   m_SizeDelta: {x: 50, y: 5}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!23 &284708967104603016
@@ -335,7 +335,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 1.45}
+  m_AnchoredPosition: {x: 0, y: 1.2}
   m_SizeDelta: {x: 20, y: 5}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!23 &5951077199960905827
@@ -659,7 +659,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2905397445
+  GlobalObjectIdHash: 2749617844
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -853,8 +853,6 @@ MonoBehaviour:
   trapPrefab: {fileID: 4210100035416277501, guid: adbd2b296d59ea34a96e110218483c20, type: 3}
   maxActiveTraps: 3
   maxTrapsPerMatch: 3
-  placeCooldown: 1
-  minTrapSpacing: 1
 --- !u!114 &4040587938389580250
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1073,12 +1071,13 @@ MonoBehaviour:
   floatText: {fileID: 495336053416953820}
   buffColor: {r: 0.25, g: 0.85, b: 0.3, a: 1}
   debuffColor: {r: 0.85, g: 0.2, b: 0.2, a: 1}
-  startYOffset: -0.5
-  endYOffset: -0.05
+  startYOffset: -0.8
+  endYOffset: -0.6
   riseDuration: 0.35
   holdDuration: 1
   driftDuringFade: 0.25
   fadeDuration: 0.45
+  extraYOffset: 0.9
 --- !u!114 &5512922188452733733
 MonoBehaviour:
   m_ObjectHideFlags: 0

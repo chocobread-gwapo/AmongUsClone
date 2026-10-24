@@ -38,6 +38,7 @@ public class LookCustomizerUI : MonoBehaviour
     private static readonly string[] RowLabels = { "COLOR", "SHIRT", "PANTS", "PANTS COLOR", "HAT", "HAT COLOR" };
 
     private GameObject openButton;
+    public GameObject OpenButton => openButton;
     private GameObject panel;
     private readonly TMP_Text[] valueTexts = new TMP_Text[6];
     private PlayerLabel label;

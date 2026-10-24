@@ -35,6 +35,9 @@ public class TarotBuffFloatText : MonoBehaviour
     [SerializeField] private float driftDuringFade = 0.25f;
     [SerializeField] private float fadeDuration = 0.45f;
 
+    [Tooltip("Extra height added to every position above so the text clears the nametag stack (name, color, role).")]
+    [SerializeField] private float extraYOffset = 0.9f;
+
     private Coroutine activeRoutine;
     private Vector3 baseLocalPosition;
 
@@ -42,7 +45,7 @@ public class TarotBuffFloatText : MonoBehaviour
     {
         if (floatText != null)
         {
-            baseLocalPosition = floatText.transform.localPosition;
+            baseLocalPosition = floatText.transform.localPosition + Vector3.up * extraYOffset;
             floatText.gameObject.SetActive(false);
         }
     }

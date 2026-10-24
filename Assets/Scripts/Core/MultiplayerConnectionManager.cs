@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -115,10 +116,20 @@ public class MultiplayerConnectionManager : MonoBehaviour
             await EnsureSignedInAsync();
             OnStatusChanged?.Invoke("Creating session...");
 
+            string hostName = PlayerName.Load();
+            if (hostName.Length == 0) hostName = "Player";
             var options = new SessionOptions
             {
                 MaxPlayers = HardMaxPlayers,
-                IsPrivate = false
+                IsPrivate = !IsPublic,
+                Name = hostName + "'s room",
+                SessionProperties = new Dictionary<string, SessionProperty>
+                {
+                    { KeyHost, new SessionProperty(hostName, VisibilityPropertyOptions.Public) },
+                    { KeyPlayers, new SessionProperty("1", VisibilityPropertyOptions.Public) },
+                    { KeyCap, new SessionProperty(capacity.ToString(), VisibilityPropertyOptions.Public) },
+                    { KeyStarted, new SessionProperty("0", VisibilityPropertyOptions.Public) },
+                }
             }.WithRelayNetwork();
 
             currentSession = await MultiplayerService.Instance.CreateSessionAsync(options);
@@ -201,6 +212,83 @@ public class MultiplayerConnectionManager : MonoBehaviour
     private int capacity = 10;
     private bool lockHooked;
 
+    // ---------- Public room list ("Find Game") ----------
+    // Hosts are PRIVATE by default (join by code only). Turning public makes the room show up in
+    // Find Game, together with these public properties.
+    private const string KeyHost = "maligno.host", KeyPlayers = "maligno.players", KeyCap = "maligno.cap", KeyStarted = "maligno.started";
+    public bool IsPublic { get; private set; }
+
+    public void SetPublic(bool value)
+    {
+        IsPublic = value;
+        RefreshLock();
+    }
+
+    public struct RoomInfo
+    {
+        public string Id, Name, Host;
+        public int Players, Capacity;
+        public bool Started, Locked;
+    }
+
+    public async Task<List<RoomInfo>> QueryRoomsAsync()
+    {
+        var list = new List<RoomInfo>();
+        try
+        {
+            await EnsureSignedInAsync();
+            var results = await MultiplayerService.Instance.QuerySessionsAsync(new QuerySessionsOptions { Count = 25 });
+            foreach (var info in results.Sessions)
+            {
+                var r = new RoomInfo
+                {
+                    Id = info.Id,
+                    Name = info.Name,
+                    Host = Prop(info.Properties, KeyHost, ""),
+                    Players = int.TryParse(Prop(info.Properties, KeyPlayers, ""), out int p) ? p : HardMaxPlayers - info.AvailableSlots,
+                    Capacity = int.TryParse(Prop(info.Properties, KeyCap, ""), out int c) ? c : info.MaxPlayers,
+                    Started = Prop(info.Properties, KeyStarted, "0") == "1",
+                    Locked = info.IsLocked,
+                };
+                list.Add(r);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+            OnConnectionFailed?.Invoke("Couldn't load rooms: " + e.Message);
+        }
+        return list;
+    }
+
+    private static string Prop(IReadOnlyDictionary<string, SessionProperty> props, string key, string fallback)
+    {
+        return props != null && props.TryGetValue(key, out var v) && v != null && v.Value != null ? v.Value : fallback;
+    }
+
+    public async Task JoinGameByIdAsync(string sessionId)
+    {
+        IsLeaving = false;
+        try
+        {
+            await EnsureSignedInAsync();
+            OnStatusChanged?.Invoke("Joining session...");
+            currentSession = await MultiplayerService.Instance.JoinSessionByIdAsync(sessionId);
+            CurrentJoinCode = currentSession.Code;
+            OnStatusChanged?.Invoke("Joined! Connecting...");
+        }
+        catch (SessionException se)
+        {
+            Debug.LogException(se);
+            OnConnectionFailed?.Invoke("Couldn't join: the room is full or no longer available.");
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+            OnConnectionFailed?.Invoke("Couldn't join: " + e.Message);
+        }
+    }
+
     public void ApplyCapacity(int n)
     {
         capacity = Mathf.Clamp(n, 1, HardMaxPlayers);
@@ -214,6 +302,7 @@ public class MultiplayerConnectionManager : MonoBehaviour
         lockHooked = true;
         nm.OnClientConnectedCallback += _ => RefreshLock();
         nm.OnClientDisconnectCallback += _ => RefreshLock();
+        UnityEngine.SceneManagement.SceneManager.activeSceneChanged += (_, __) => RefreshLock();
     }
 
     private async void RefreshLock()
@@ -223,13 +312,27 @@ public class MultiplayerConnectionManager : MonoBehaviour
             if (currentSession == null || !currentSession.IsHost) return;
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsServer) return;
-            bool full = nm.ConnectedClientsIds.Count >= capacity;
+            int players = nm.ConnectedClientsIds.Count;
+            bool full = players >= capacity;
+            bool started = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != lobbySceneName;
             var host = currentSession.AsHost();
-            if (host.IsLocked == full) return;
-            host.IsLocked = full;
-            await host.SavePropertiesAsync();
+
+            bool dirty = false;
+            if (host.IsLocked != full) { host.IsLocked = full; dirty = true; }
+            if (host.IsPrivate != !IsPublic) { host.IsPrivate = !IsPublic; dirty = true; }
+            dirty |= SetListing(host, KeyPlayers, players.ToString());
+            dirty |= SetListing(host, KeyCap, capacity.ToString());
+            dirty |= SetListing(host, KeyStarted, started ? "1" : "0");
+            if (dirty) await host.SavePropertiesAsync();
         }
         catch (Exception e) { Debug.LogWarning("[Multiplayer] Couldn't update lobby lock: " + e.Message); }
+    }
+
+    private static bool SetListing(IHostSession host, string key, string value)
+    {
+        if (host.Properties.TryGetValue(key, out var cur) && cur != null && cur.Value == value) return false;
+        host.SetProperty(key, new SessionProperty(value, VisibilityPropertyOptions.Public));
+        return true;
     }
 
     // ---------- Client ----------

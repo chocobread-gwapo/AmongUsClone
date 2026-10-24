@@ -12,6 +12,7 @@ public class RoleTag : MonoBehaviour
     private PlayerRole role;
     private TextMeshPro tag;
     private string lastText;
+    private Vector3? baseLocalPos;
 
     private void Awake()
     {
@@ -63,6 +64,10 @@ public class RoleTag : MonoBehaviour
         TextMeshPro baseText = label != null ? label.Text : null;
         if (baseText == null) return;
 
+        if (baseLocalPos == null) baseLocalPos = baseText.transform.localPosition;
+        // Always measure from the label's original spot; it is lifted below when the tag shows.
+        baseText.transform.localPosition = baseLocalPos.Value;
+
         if (tag == null)
         {
             tag = Instantiate(baseText, baseText.transform.parent);
@@ -82,7 +87,17 @@ public class RoleTag : MonoBehaviour
         baseText.ForceMeshUpdate();
         tag.ForceMeshUpdate();
         tag.transform.position = baseText.transform.position;
+        float origBottomWorld = baseText.renderer.bounds.min.y;
         float shift = (baseText.bounds.min.y - 0.03f) - tag.bounds.max.y;
         tag.transform.position += new Vector3(0f, shift, 0f);
+
+        // Lift name + tag together so the tag ends where the name used to end,
+        // instead of hanging over the character's head.
+        float lift = origBottomWorld - tag.renderer.bounds.min.y;
+        if (lift > 0f)
+        {
+            baseText.transform.position += new Vector3(0f, lift, 0f);
+            tag.transform.position += new Vector3(0f, lift, 0f);
+        }
     }
 }

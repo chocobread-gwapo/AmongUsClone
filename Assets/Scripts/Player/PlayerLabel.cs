@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -17,6 +18,13 @@ public class PlayerLabel : NetworkBehaviour
     // Server only: last look of every client, so a scene change (Lobby <-> Game respawns players) keeps it.
     private static readonly Dictionary<ulong, int> rememberedLooks = new Dictionary<ulong, int>();
     private static NetworkManager hookedManager;
+    // Server only: last username of every client (survives Lobby <-> Game respawns).
+    private static readonly Dictionary<ulong, string> rememberedNames = new Dictionary<ulong, string>();
+    // Every machine: last known username per client, so names still resolve after someone leaves.
+    private static readonly Dictionary<ulong, string> knownNames = new Dictionary<ulong, string>();
+
+    private readonly NetworkVariable<FixedString32Bytes> username = new NetworkVariable<FixedString32Bytes>(
+        default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private readonly NetworkVariable<int> lookPacked = new NetworkVariable<int>(
         -1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -41,7 +49,33 @@ public class PlayerLabel : NetworkBehaviour
     public static string DisplayName(ulong ownerClientId)
     {
         var (colorName, _) = LookCatalog.Palette[ColorIndexFor(ownerClientId)];
-        return $"Player {ownerClientId + 1} ({colorName})";
+        return $"{NameFor(ownerClientId)} ({colorName})";
+    }
+
+    // The chosen username, or "Player N" when none was set.
+    public static string NameFor(ulong ownerClientId)
+    {
+        if (registry.TryGetValue(ownerClientId, out PlayerLabel l) && l != null)
+        {
+            string n = l.username.Value.ToString();
+            if (n.Length > 0) return n;
+        }
+        if (knownNames.TryGetValue(ownerClientId, out string known) && known.Length > 0) return known;
+        return $"Player {ownerClientId + 1}";
+    }
+
+    // Trims, strips rich-text/control characters and caps the length.
+    public static string SanitizeName(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in raw)
+        {
+            if (c == '<' || c == '>' || char.IsControl(c)) continue;
+            sb.Append(c);
+            if (sb.Length >= 14) break;
+        }
+        return sb.ToString().Trim();
     }
 
     public static Color ColorFor(ulong ownerClientId)
@@ -54,7 +88,7 @@ public class PlayerLabel : NetworkBehaviour
     {
         var (colorName, color) = LookCatalog.Palette[ColorIndexFor(ownerClientId)];
         string hex = ColorUtility.ToHtmlStringRGB(color);
-        return $"<b>Player {ownerClientId + 1}</b>\n<color=#{hex}>{colorName}</color>";
+        return $"<b>{NameFor(ownerClientId)}</b> <color=#{hex}>({colorName})</color>";
     }
 
     // ---- look ----
@@ -123,12 +157,27 @@ public class PlayerLabel : NetworkBehaviour
         rememberedLooks[OwnerClientId] = lookPacked.Value;
     }
 
+    [ServerRpc]
+    private void SubmitNameServerRpc(string raw)
+    {
+        string n = SanitizeName(raw);
+        username.Value = new FixedString32Bytes(n);
+        rememberedNames[OwnerClientId] = n;
+    }
+
+    private void HandleNameChanged(FixedString32Bytes previous, FixedString32Bytes current)
+    {
+        knownNames[OwnerClientId] = current.ToString();
+        WorldLabel label = GetComponent<WorldLabel>();
+        if (label != null && disguiseLook.Value < 0) label.SetLabel(RichLabel(OwnerClientId));
+    }
+
     private void ServerInitLook()
     {
         if (hookedManager != NetworkManager.Singleton && NetworkManager.Singleton != null)
         {
             hookedManager = NetworkManager.Singleton;
-            hookedManager.OnServerStopped += _ => rememberedLooks.Clear();
+            hookedManager.OnServerStopped += _ => { rememberedLooks.Clear(); rememberedNames.Clear(); };
         }
 
         LookData d = rememberedLooks.TryGetValue(OwnerClientId, out int remembered)
@@ -137,6 +186,7 @@ public class PlayerLabel : NetworkBehaviour
         d.color = FreeColor(d.color);
         lookPacked.Value = d.Pack();
         rememberedLooks[OwnerClientId] = lookPacked.Value;
+        if (rememberedNames.TryGetValue(OwnerClientId, out string rn)) username.Value = new FixedString32Bytes(rn);
     }
 
     private void HandleLookChanged(int previous, int current)
@@ -156,6 +206,8 @@ public class PlayerLabel : NetworkBehaviour
     {
         registry[OwnerClientId] = this;
         lookPacked.OnValueChanged += HandleLookChanged;
+        username.OnValueChanged += HandleNameChanged;
+        knownNames[OwnerClientId] = username.Value.ToString();
         if (IsServer) ServerInitLook();
 
         WorldLabel label = GetComponent<WorldLabel>();
@@ -179,12 +231,15 @@ public class PlayerLabel : NetworkBehaviour
         {
             int saved = LookCatalog.LoadSaved();
             if (saved >= 0) SubmitLookServerRpc(saved);
+            string savedName = PlayerName.Load();
+            if (savedName.Length > 0) SubmitNameServerRpc(savedName);
         }
     }
 
     public override void OnNetworkDespawn()
     {
         lookPacked.OnValueChanged -= HandleLookChanged;
+        username.OnValueChanged -= HandleNameChanged;
         if (registry.TryGetValue(OwnerClientId, out PlayerLabel l) && l == this) registry.Remove(OwnerClientId);
     }
 }

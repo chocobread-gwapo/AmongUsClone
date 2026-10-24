@@ -17,6 +17,13 @@ Host a room, share the code, play a full match (tasks, meetings, kills, abilitie
 - **Disconnect handling**: a player who leaves is removed cleanly (their tasks, votes and role slot); win conditions are re-checked
 - **Host migration**: if the host drops, the group is moved into a fresh lobby under a new host
 - Return to Lobby after a match without restarting the app
+- **Find Game**: hosts can switch their room to **PUBLIC** (rooms are private by default) and it appears in a room list under PLAY → FIND GAME, with host name, player count and an OPEN / FULL / IN GAME tag; join with one click or by room code
+- **Quit to menu** from inside a match (Settings → QUIT TO MENU, click twice to confirm)
+
+**Players & customization**
+- **Usernames**: set yours under ACCOUNT on the main menu (up to 14 characters, saved on your computer). The nametag reads `Username (Color)` and the same name is used in meetings, vote results, the game-over screen and disconnect messages
+- **Character customization** in the lobby: color (unique per player, enforced by the host), shirt, pants and hat, each with its own color; RANDOM button; your look is saved and restored next session
+- Your look shows in the role reveal, meeting portraits and on your corpse, and an Aswang shapeshift copies the target's full look
 
 **Roles**
 - Server-authoritative role assignment with private reveal (each client only learns its own role)
@@ -51,18 +58,19 @@ Host a room, share the code, play a full match (tasks, meetings, kills, abilitie
 - **Curse**: stepping on a mound curses a Villager with a red glow, slower movement and reduced vision. It does not wear off: the player dies after 20 seconds unless an Albularyo cures them
 - HUD: task bar and list, contextual USE button, REPORT, ABILITY with cooldown overlay, kill cooldown badge
 - Win/loss conditions, all server-checked: tasks complete, all Maligno ejected, or Maligno reach parity
+- **Minimap**, footstep sounds, an emergency-meeting popup and voted badges on the meeting screen
+- Maligno see themselves and fellow Maligno in red
+- **Host settings are saved** between sessions on the host's computer
 - Sound effects and a game-over screen with the full role reveal
 
 ### Not yet built
 - **Visual tasks** setting (task animations visible to others)
 - Sabotage, vents, and a larger map with more task spots (the current pool is 14 task locations)
-- Player customization (colors, hats) — colors are currently fixed per player slot
-- Saving settings between sessions
-- Quit-to-menu from inside a match
-- Final character art (a placeholder sprite set is in use)
+- Final character and clothing art (placeholder sprites are in use; the clothing overlays and corpse clothes are generated from the placeholder)
 - Music and further visual polish
+- Region filter and search in Find Game, and changing your username from inside the lobby
 - Anti-cheat hardening (movement and vision are owner-authoritative, not server-validated)
-- Broad multi-player and over-the-internet testing: most behavior has been verified in the editor with a few virtual players
+- Broad multi-player and over-the-internet testing: most behavior has been verified in the editor with a few virtual players (Find Game with real rooms and usernames across machines still needs a two-player test)
 
 ## Tech stack
 - Unity 6 (6000.6.6f1)
@@ -85,8 +93,8 @@ Host a room, share the code, play a full match (tasks, meetings, kills, abilitie
 2. Open with Unity Hub → Unity 6000.6.6f1 (or closest compatible version)
 3. Link the project to a Unity cloud project (needed for Relay and Sessions)
 4. Confirm the project's `UniversalRP` asset is assigned under Project Settings → Graphics and Quality
-5. Open the `MainMenu` scene and press Play → **PLAY** → **HOST GAME**
-6. To test with others, use Multiplayer Play Mode virtual players, or build the game (**Maligno → 20. Build Windows Player**) and send the whole build folder to friends; they enter your room code under **JOIN GAME**
+5. Open the `MainMenu` scene, optionally set a name under **ACCOUNT**, then press Play → **PLAY** → **HOST GAME**
+6. To test with others, use Multiplayer Play Mode virtual players, or build the game (**Maligno → 20. Build Windows Player**) and send the whole build folder to friends; they enter your room code under **JOIN GAME**, or find you under **FIND GAME** if you set the room to PUBLIC in the lobby
 7. Host clicks **Start** once enough players have joined (4+ recommended) — roles and tasks are assigned automatically
 
 ## Team

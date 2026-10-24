@@ -6,7 +6,7 @@ Maligno is a pixel-art social deduction game set in **Sitio Maligno**, a Philipp
 What sets it apart from a straight reskin is that roles are folklore-driven: each Maligno type has its own ability, and Villagers can roll a special class, so it plays closer to a hidden-role game with asymmetric powers than a pure clone.
 
 ## Current state
-An online multiplayer game that is playable from lobby to win screen. A host creates a room and shares a short code; friends join from anywhere through Unity Relay, no shared network needed. A full round (tasks, meetings, kills, abilities, win condition) and a return to the lobby all work. Most behavior has been tested in the editor with a few virtual players; broad testing across real internet connections is still to do.
+An online multiplayer game that is playable from lobby to win screen. A host creates a room and shares a short code (or makes the room public so it shows up under Find Game); friends join from anywhere through Unity Relay, no shared network needed. A full round (tasks, meetings, kills, abilities, win condition) and a return to the lobby all work. Most behavior has been tested in the editor with a few virtual players; broad testing across real internet connections is still to do.
 
 ## Roles
 **Maligno**
@@ -14,7 +14,7 @@ An online multiplayer game that is playable from lobby to win screen. A host cre
 |---|---|---|
 | **Tikbalang** | Bewilder | Inverts a nearby Villager's controls briefly |
 | **Duwende** | Curse Trap | Mound only Maligno can see; whoever steps on it is cursed (red glow, slowed, half-blind) and dies after 20 seconds unless an Albularyo cures them |
-| **Aswang** | Shapeshift | Copies a nearby player's look and name for a short time |
+| **Aswang** | Shapeshift | Copies a nearby player's full look (color, clothes) and name for a short time |
 | **Kapre** | Smoke Screen | Smoke that shrinks nearby Villagers' vision |
 | **Bal-Bal** | Consume | Eats a victim so no body is left; ability cooldown is twice the kill cooldown |
 
@@ -31,6 +31,10 @@ Each role's chance is an independent percentage with a cap, set by the host. A M
 
 ## Systems built
 - **Online play** — Relay room codes, host migration if the host drops, disconnect handling, a Capacity setting (4–15) that locks the room when full
+- **Find Game** — rooms are private by default; the host can set a room to PUBLIC and it appears in a browsable list (host name, players, OPEN / FULL / IN GAME) under PLAY → FIND GAME
+- **Usernames** — set under ACCOUNT on the main menu, saved on the player's computer, shown on nametags (`Username (Color)`), in meetings, votes and the game-over screen
+- **Customization** — unique color plus shirt, pants and hat (each with a color), picked in the lobby, saved between sessions, shown on the character, role reveal, meeting portraits and corpses
+- **Quality of life** — host settings saved between sessions, quit to menu from a match, minimap, footstep sounds, emergency-meeting popup, voted badges, red names for fellow Maligno
 - **Per-player tasks** — each Villager gets their own random common, long and short chores with mini-games; one shared progress bar counts everyone's work
 - **Meetings** — Among Us–style emergency table and body reports, optional discussion phase, open or anonymous votes, confirm-ejects option
 - **Game Settings window** — presets (Classic, Quick Match, Hardcore, Social), Maligno and Villager tuning, meeting rules, task counts, task bar mode, and per-role count and chance
@@ -40,12 +44,13 @@ Each role's chance is an independent percentage with a cap, set by the host. A M
 - **Win conditions** and a game-over screen that reveals every role; **Return to Lobby** to replay
 
 ## What's next
-- Test over real internet connections with friends, and a larger multi-player pass on kills, meetings and abilities
+- Test over real internet connections with friends, including Find Game with real rooms, and a larger multi-player pass on kills, meetings and abilities
 - Sabotage, vents and a bigger map with more task spots
-- Visual tasks, player customization and saving settings between sessions
-- Final character art, music and visual polish
-- Quit-to-menu during a match
+- Visual tasks
+- Final character and clothing art (current art is placeholder), music and visual polish
+- Region filter in Find Game, and renaming from inside the lobby
 - Tighter server-side anti-cheat (movement and vision validation)
+- Rebuild and re-publish the Windows and Mac releases so they include the newest features
 
 ## Tech
 Unity 6, Netcode for GameObjects (server-authoritative), Unity Gaming Services (Authentication, Relay, Multiplayer Sessions), URP 2D (Light2D fog-of-war), the new Input System, TextMeshPro.

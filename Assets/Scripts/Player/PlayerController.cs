@@ -309,12 +309,12 @@ public class PlayerController : NetworkBehaviour
     {
         bool meetingActive = MeetingManager.Instance != null && MeetingManager.Instance.IsMeetingActive;
         bool gameOver = GameResultManager.Instance != null && GameResultManager.Instance.GameEnded;
-        return meetingActive || gameOver || TaskMiniGame.IsOpen || EmergencyUI.PopupOpen || LookCustomizerUI.PanelOpen;
+        return meetingActive || gameOver || TaskMiniGame.IsOpen || EmergencyUI.PopupOpen || LookCustomizerUI.PanelOpen || ChatUI.Typing;
     }
 
-    private void OnInteract(InputAction.CallbackContext context) => TryInteract();
-    private void OnKillPressed(InputAction.CallbackContext context) => TryKill();
-    private void OnReportPressed(InputAction.CallbackContext context) => TryReport();
+    private void OnInteract(InputAction.CallbackContext context) { if (!ChatUI.Typing) TryInteract(); }
+    private void OnKillPressed(InputAction.CallbackContext context) { if (!ChatUI.Typing) TryKill(); }
+    private void OnReportPressed(InputAction.CallbackContext context) { if (!ChatUI.Typing) TryReport(); }
 
     // ---- UI-button entry points ----
     // Wired to the on-screen REPORT/USE buttons' OnClick. Share the exact same
@@ -527,7 +527,7 @@ public class PlayerController : NetworkBehaviour
     // will actually do anything — each one gates itself via IsMyAbility(),
     // the same pattern BalBalAbility already uses. Bal-bal is excluded here
     // since "eating the body" is wired through the kill button instead.
-    private void OnAbilityPressed(InputAction.CallbackContext context) => TryUseAbility();
+    private void OnAbilityPressed(InputAction.CallbackContext context) { if (!ChatUI.Typing) TryUseAbility(); }
 
     // On-screen ABILITY button entry point — same bridge pattern as
     // OnUseButtonPressed/OnReportButtonPressed, so the keyboard binding and

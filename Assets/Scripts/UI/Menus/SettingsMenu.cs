@@ -21,7 +21,8 @@ public class SettingsMenu : MonoBehaviour
     private bool quitArmed, leaving;
     private Action onClosed;
     private bool built;
-    private TextMeshProUGUI fullscreenLabel, hintsLabel;
+    private TextMeshProUGUI fullscreenLabel, hintsLabel, micLabel, filterLabel, voiceHeading, pttModeLabel, pttKeyLabel;
+    private bool listeningPtt;
     private readonly List<Slider> sliders = new List<Slider>();
     private readonly List<KeyRow> keyRows = new List<KeyRow>();
     private InputActionRebindingExtensions.RebindingOperation rebinding;
@@ -79,6 +80,7 @@ public class SettingsMenu : MonoBehaviour
     private void Update()
     {
         var kb = Keyboard.current;
+        if (listeningPtt && kb != null && IsOpen) { ListenForPttKey(kb); return; }
         bool miniOpen = TaskMiniGame.IsOpen;
         if (kb != null && kb.escapeKey.wasPressedThisFrame && rebinding == null && Time.frameCount - rebindEndFrame > 2)
         {
@@ -141,10 +143,41 @@ public class SettingsMenu : MonoBehaviour
         sliders[0].SetValueWithoutNotify(GameSettings.Master);
         sliders[1].SetValueWithoutNotify(GameSettings.Music);
         sliders[2].SetValueWithoutNotify(GameSettings.Sfx_);
+        sliders[3].SetValueWithoutNotify(VoiceSettings.MicVolume);
+        sliders[4].SetValueWithoutNotify(VoiceSettings.VoiceVolume);
+        micLabel.text = "MIC: " + (VoiceSettings.MicMuted ? "MUTED" : "ON");
+        filterLabel.text = "NOISE FILTER: " + (VoiceSettings.NoiseFilter ? "ON" : "OFF");
+        voiceHeading.text = "VOICE CHAT  (" + VoiceChat.StatusText + ")";
+        listeningPtt = false;
+        RefreshPttLabels();
         foreach (var s in sliders) UpdatePct(s);
         fullscreenLabel.text = "FULLSCREEN: " + (Screen.fullScreen ? "ON" : "OFF");
         hintsLabel.text = "HINTS: " + (GameSettings.HintsOn ? "ON" : "OFF");
         RebuildKeyRows();
+    }
+
+    private void RefreshPttLabels()
+    {
+        pttModeLabel.text = VoiceSettings.PttEnabled ? "MODE: PUSH TO TALK" : "MODE: OPEN MIC";
+        pttKeyLabel.text = "PTT KEY: " + VoiceSettings.PttKeyName;
+    }
+
+    // While waiting for the push-to-talk key: the next key pressed becomes the key (Esc cancels).
+    private void ListenForPttKey(Keyboard kb)
+    {
+        if (kb.escapeKey.wasPressedThisFrame)
+        {
+            listeningPtt = false; rebindEndFrame = Time.frameCount; RefreshPttLabels();
+            return;
+        }
+        foreach (var k in kb.allKeys)
+        {
+            if (!k.wasPressedThisFrame) continue;
+            VoiceSettings.PttKey = k.keyCode;
+            listeningPtt = false; rebindEndFrame = Time.frameCount;
+            RefreshPttLabels();
+            return;
+        }
     }
 
     private static void UpdatePct(Slider s)
@@ -284,9 +317,9 @@ public class SettingsMenu : MonoBehaviour
         scaler.referenceResolution = new Vector2(1920, 1080); scaler.matchWidthOrHeight = 0.5f;
 
         // Small always-available button (not on the main menu, which has its own).
-        gearButton = MakeButton(canvasGo.transform, "SETTINGS", 22, new Color(0.1f, 0.15f, 0.18f, 0.85f), 170, 44).gameObject;
+        gearButton = MakeButton(canvasGo.transform, "SETTINGS", 22, new Color(0.1f, 0.15f, 0.18f, 0.85f), 170, 52).gameObject;
         var grt = (RectTransform)gearButton.transform;
-        grt.anchorMin = grt.anchorMax = Vector2.zero; grt.pivot = Vector2.zero; grt.anchoredPosition = new Vector2(16, 16);
+        grt.anchorMin = grt.anchorMax = grt.pivot = new Vector2(1, 1); grt.sizeDelta = new Vector2(170, 52); grt.anchoredPosition = new Vector2(-24, -16); // top-right, CHAT sits to its left
         gearButton.GetComponent<Button>().onClick.AddListener(() => OpenInternal(null));
         gearButton.SetActive(!IsMainMenu());
 
@@ -300,10 +333,10 @@ public class SettingsMenu : MonoBehaviour
         box.transform.SetParent(panel.transform, false);
         var brt = (RectTransform)box.transform;
         brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.5f); brt.pivot = new Vector2(0.5f, 0.5f);
-        brt.sizeDelta = new Vector2(1060, 820);
+        brt.sizeDelta = new Vector2(1060, 1064);
         box.GetComponent<Image>().color = Ink;
         var v = box.GetComponent<VerticalLayoutGroup>();
-        v.padding = new RectOffset(40, 40, 28, 28); v.spacing = 12;
+        v.padding = new RectOffset(40, 40, 20, 20); v.spacing = 6;
         v.childControlWidth = true; v.childControlHeight = true; v.childForceExpandWidth = true; v.childForceExpandHeight = false;
 
         var title = Label(box.transform, "SETTINGS", 54, Teal);
@@ -314,6 +347,51 @@ public class SettingsMenu : MonoBehaviour
         SliderRow(box.transform, "Master volume", GameSettings.SetMaster);
         SliderRow(box.transform, "Music", GameSettings.SetMusic);
         SliderRow(box.transform, "Effects", GameSettings.SetSfx);
+
+        voiceHeading = Heading(box.transform, "VOICE CHAT");
+        SliderRow(box.transform, "Mic volume", VoiceSettings.SetMicVolume);
+        SliderRow(box.transform, "Voice volume", VoiceSettings.SetVoiceVolume);
+        var mic = new GameObject("MicRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        mic.transform.SetParent(box.transform, false);
+        mic.GetComponent<LayoutElement>().preferredHeight = 50;
+        var mh = mic.GetComponent<HorizontalLayoutGroup>();
+        mh.spacing = 20; mh.childAlignment = TextAnchor.MiddleLeft;
+        mh.childControlWidth = true; mh.childControlHeight = true; mh.childForceExpandWidth = false;
+        var mb = MakeButton(mic.transform, "MIC", 26, new Color(0.15f, 0.3f, 0.35f), 470, 50);
+        micLabel = mb.GetComponentInChildren<TextMeshProUGUI>();
+        mb.onClick.AddListener(() =>
+        {
+            VoiceSettings.MicMuted = !VoiceSettings.MicMuted;
+            micLabel.text = "MIC: " + (VoiceSettings.MicMuted ? "MUTED" : "ON");
+        });
+        var ptt = new GameObject("PttRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        ptt.transform.SetParent(box.transform, false);
+        ptt.GetComponent<LayoutElement>().preferredHeight = 50;
+        var ph = ptt.GetComponent<HorizontalLayoutGroup>();
+        ph.spacing = 20; ph.childAlignment = TextAnchor.MiddleLeft;
+        ph.childControlWidth = true; ph.childControlHeight = true; ph.childForceExpandWidth = false;
+        var pm = MakeButton(ptt.transform, "MODE", 26, new Color(0.15f, 0.3f, 0.35f), 470, 50);
+        pttModeLabel = pm.GetComponentInChildren<TextMeshProUGUI>();
+        pm.onClick.AddListener(() =>
+        {
+            VoiceSettings.PttEnabled = !VoiceSettings.PttEnabled;
+            listeningPtt = false;
+            RefreshPttLabels();
+        });
+        var pk = MakeButton(ptt.transform, "PTT KEY", 26, new Color(0.15f, 0.3f, 0.35f), 470, 50);
+        pttKeyLabel = pk.GetComponentInChildren<TextMeshProUGUI>();
+        pk.onClick.AddListener(() =>
+        {
+            listeningPtt = true;
+            pttKeyLabel.text = "PRESS A KEY...";
+        });
+        var fb = MakeButton(mic.transform, "NOISE FILTER", 26, new Color(0.15f, 0.3f, 0.35f), 470, 50);
+        filterLabel = fb.GetComponentInChildren<TextMeshProUGUI>();
+        fb.onClick.AddListener(() =>
+        {
+            VoiceSettings.NoiseFilter = !VoiceSettings.NoiseFilter;
+            filterLabel.text = "NOISE FILTER: " + (VoiceSettings.NoiseFilter ? "ON" : "OFF");
+        });
 
         Heading(box.transform, "DISPLAY");
         var disp = new GameObject("DisplayRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
@@ -358,7 +436,7 @@ public class SettingsMenu : MonoBehaviour
         reset.onClick.AddListener(() =>
         {
             CancelRebind();
-            GameSettings.ResetAudio(); GameSettings.ResetBindings(asset);
+            GameSettings.ResetAudio(); GameSettings.ResetBindings(asset); VoiceSettings.Reset();
             RefreshAll();
         });
         quitButton = MakeButton(bottom.transform, "QUIT TO MENU", 26, new Color(0.6f, 0.2f, 0.2f), 400, 56);
@@ -372,10 +450,11 @@ public class SettingsMenu : MonoBehaviour
         canvasGo.SetActive(true);
     }
 
-    private void Heading(Transform parent, string text)
+    private TextMeshProUGUI Heading(Transform parent, string text)
     {
         var t = Label(parent, text, 28, Teal);
         t.GetComponent<LayoutElement>().preferredHeight = 38;
+        return t;
     }
 
     private void SliderRow(Transform parent, string label, Action<float> setter)

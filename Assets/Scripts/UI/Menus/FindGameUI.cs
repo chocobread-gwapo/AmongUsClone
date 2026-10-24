@@ -175,6 +175,7 @@ public class FindGameUI : MonoBehaviour
         Place(toggleButton.transform, panel, left + editW + gap, top, pr.width - pad - (left + editW + gap), editH);
         Place(custom.OpenButton.transform, panel, left, top + editH + 24f, pr.width - pad - left, editH);
         panel.sizeDelta += new Vector2(0f, editH + 24f);
+        panel.anchoredPosition += new Vector2(0f, -70f); // make room for the CHAT / SETTINGS buttons above the panel
         arranged = true;
     }
 

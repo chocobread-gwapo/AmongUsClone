@@ -224,6 +224,10 @@ public class MeetingManager : NetworkBehaviour
         // emergency call.
         DeadBody.DespawnAll();
 
+        // Everyone is moved back to the spawn area the moment a meeting starts. The meeting screen hides
+        // the map, so nobody sees the jump, and the match resumes right at the table afterwards.
+        SceneSpawnPoints.PlaceAllPlayers();
+
         serverMeetingStartTime = Time.time;
         serverDiscussionEndsAt = Time.time + DiscussionSeconds;
 
